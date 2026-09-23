@@ -1,67 +1,155 @@
 {
+ "name": "Z-bracket",
+ "thickness": 2.0,
+ "kFactor": 0.44,
+ "material": {
+  "id": "std:mild-steel",
+  "Rm": 420.0,
+  "k": 0.44,
+  "sb": 1.5,
+  "minR": 0.8
+ },
+ "flat": {
+  "id": "Z-bracket",
   "name": "Z-bracket",
   "thickness": 2.0,
-  "kFactor": 0.44,
-  "flat": {
-    "name": "Z-bracket",
-    "thickness": 2.0,
-    "width": 100,
-    "length": 123.04778684233861,
-    "outline": [
-      [
-        0,
-        0
-      ],
-      [
-        123.04778684233861,
-        0
-      ],
-      [
-        123.04778684233861,
-        100
-      ],
-      [
-        0,
-        100
-      ]
-    ],
-    "holes": [],
-    "bends": [
-      {
-        "id": "B1",
-        "u": 38.26194671058465,
-        "direction": "up",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302,
-        "p0": [
-          38.26194671058465,
-          0
-        ],
-        "p1": [
-          38.26194671058465,
-          100
-        ]
-      },
-      {
-        "id": "B2",
-        "u": 84.78584013175396,
-        "direction": "down",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302,
-        "p0": [
-          84.78584013175396,
-          0
-        ],
-        "p1": [
-          84.78584013175396,
-          100
-        ]
-      }
-    ]
+  "materialId": "std:mild-steel",
+  "outline": [
+   {
+    "x": 0,
+    "y": 0
+   },
+   {
+    "x": 123.047787,
+    "y": 0
+   },
+   {
+    "x": 123.047787,
+    "y": 100
+   },
+   {
+    "x": 0,
+    "y": 100
+   }
+  ],
+  "holes": [],
+  "bends": [
+   {
+    "id": "B1",
+    "p0": {
+     "x": 38.261947,
+     "y": 0
+    },
+    "p1": {
+     "x": 38.261947,
+     "y": 100
+    },
+    "direction": "up",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   },
+   {
+    "id": "B2",
+    "p0": {
+     "x": 84.78584,
+     "y": 0
+    },
+    "p1": {
+     "x": 84.78584,
+     "y": 100
+    },
+    "direction": "down",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   }
+  ],
+  "sourceUnits": "mm"
+ },
+ "expected": {
+  "bendCount": 2,
+  "directions": {
+   "B1": "up",
+   "B2": "down"
   },
-  "bendCount": 2
+  "bendAllowance": {
+   "B1": 4.523893421169302,
+   "B2": 4.523893421169302
+  },
+  "foldedBounds": {
+   "x": 78.0,
+   "y": 50.002,
+   "z": 100.002
+  },
+  "flatBounds": {
+   "w": 123.047787,
+   "h": 100
+  },
+  "frame": {
+   "u": "X",
+   "v": "-Z",
+   "w": "Y",
+   "handedness": "right"
+  },
+  "holeCount": 0,
+  "defaultSetup": {
+   "punch": "std:punch-straight-88-r0.8",
+   "die": "std:die-v16-88",
+   "dieV": 16.0,
+   "dieAngle": 88,
+   "shoulderRadius": 1.5,
+   "punchTipRadius": 0.8
+  },
+  "perBend": {
+   "B1": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 100.0,
+    "forcePerMeter": 149.1,
+    "force": 14.91,
+    "minLegOutside": 14.986387388711767
+   },
+   "B2": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 100.0,
+    "forcePerMeter": 149.1,
+    "force": 14.91,
+    "minLegOutside": 14.986387388711767
+   }
+  },
+  "tolerances": {
+   "length": 0.05,
+   "angle": 0.5,
+   "forcePercent": 2,
+   "ramDepth": 0.3
+  },
+  "flangeCount": 3,
+  "expectedFlips": 1
+ }
 }

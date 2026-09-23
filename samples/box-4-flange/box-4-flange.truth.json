@@ -1,129 +1,266 @@
 {
+ "name": "box-4-flange",
+ "thickness": 2.0,
+ "kFactor": 0.44,
+ "material": {
+  "id": "std:mild-steel",
+  "Rm": 420.0,
+  "k": 0.44,
+  "sb": 1.5,
+  "minR": 0.8
+ },
+ "flat": {
+  "id": "box-4-flange",
   "name": "box-4-flange",
   "thickness": 2.0,
-  "kFactor": 0.44,
-  "flat": {
-    "name": "box-4-flange",
-    "thickness": 2.0,
-    "width": 203.0477868423386,
-    "length": 253.0477868423386,
-    "outline": [
-      [
-        28.261946710584652,
-        0.0
-      ],
-      [
-        224.78584013175396,
-        0.0
-      ],
-      [
-        224.78584013175396,
-        28.261946710584652
-      ],
-      [
-        253.0477868423386,
-        28.261946710584652
-      ],
-      [
-        253.0477868423386,
-        174.78584013175396
-      ],
-      [
-        224.78584013175396,
-        174.78584013175396
-      ],
-      [
-        224.78584013175396,
-        203.0477868423386
-      ],
-      [
-        28.261946710584652,
-        203.0477868423386
-      ],
-      [
-        28.261946710584652,
-        174.78584013175396
-      ],
-      [
-        0.0,
-        174.78584013175396
-      ],
-      [
-        0.0,
-        28.261946710584652
-      ],
-      [
-        28.261946710584652,
-        28.261946710584652
-      ]
-    ],
-    "holes": [],
-    "bends": [
-      {
-        "id": "B1",
-        "p0": [
-          28.261946710584652,
-          30.523893421169305
-        ],
-        "p1": [
-          224.78584013175396,
-          30.523893421169305
-        ],
-        "direction": "up",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302
-      },
-      {
-        "id": "B2",
-        "p0": [
-          222.5238934211693,
-          28.261946710584652
-        ],
-        "p1": [
-          222.5238934211693,
-          174.78584013175396
-        ],
-        "direction": "up",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302
-      },
-      {
-        "id": "B3",
-        "p0": [
-          28.261946710584652,
-          172.5238934211693
-        ],
-        "p1": [
-          224.78584013175396,
-          172.5238934211693
-        ],
-        "direction": "up",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302
-      },
-      {
-        "id": "B4",
-        "p0": [
-          30.523893421169305,
-          28.261946710584652
-        ],
-        "p1": [
-          30.523893421169305,
-          174.78584013175396
-        ],
-        "direction": "up",
-        "angle": 90,
-        "innerRadius": 2.0,
-        "kFactor": 0.44,
-        "bendAllowance": 4.523893421169302
-      }
-    ]
+  "materialId": "std:mild-steel",
+  "outline": [
+   {
+    "x": 30.523893,
+    "y": 0.0
+   },
+   {
+    "x": 222.523893,
+    "y": 0.0
+   },
+   {
+    "x": 222.523893,
+    "y": 30.523893
+   },
+   {
+    "x": 253.047787,
+    "y": 30.523893
+   },
+   {
+    "x": 253.047787,
+    "y": 172.523893
+   },
+   {
+    "x": 222.523893,
+    "y": 172.523893
+   },
+   {
+    "x": 222.523893,
+    "y": 203.047787
+   },
+   {
+    "x": 30.523893,
+    "y": 203.047787
+   },
+   {
+    "x": 30.523893,
+    "y": 172.523893
+   },
+   {
+    "x": 0.0,
+    "y": 172.523893
+   },
+   {
+    "x": 0.0,
+    "y": 30.523893
+   },
+   {
+    "x": 30.523893,
+    "y": 30.523893
+   }
+  ],
+  "holes": [],
+  "bends": [
+   {
+    "id": "B1",
+    "p0": {
+     "x": 30.523893,
+     "y": 28.261947
+    },
+    "p1": {
+     "x": 222.523893,
+     "y": 28.261947
+    },
+    "direction": "up",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   },
+   {
+    "id": "B2",
+    "p0": {
+     "x": 224.78584,
+     "y": 30.523893
+    },
+    "p1": {
+     "x": 224.78584,
+     "y": 172.523893
+    },
+    "direction": "up",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   },
+   {
+    "id": "B3",
+    "p0": {
+     "x": 30.523893,
+     "y": 174.78584
+    },
+    "p1": {
+     "x": 222.523893,
+     "y": 174.78584
+    },
+    "direction": "up",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   },
+   {
+    "id": "B4",
+    "p0": {
+     "x": 28.261947,
+     "y": 30.523893
+    },
+    "p1": {
+     "x": 28.261947,
+     "y": 172.523893
+    },
+    "direction": "up",
+    "angle": 90,
+    "innerRadius": 2.0,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   }
+  ],
+  "sourceUnits": "mm"
+ },
+ "expected": {
+  "bendCount": 4,
+  "directions": {
+   "B1": "up",
+   "B2": "up",
+   "B3": "up",
+   "B4": "up"
   },
-  "bendCount": 4
+  "bendAllowance": {
+   "B1": 4.523893421169302,
+   "B2": 4.523893421169302,
+   "B3": 4.523893421169302,
+   "B4": 4.523893421169302
+  },
+  "foldedBounds": {
+   "x": 200.002,
+   "y": 30.001,
+   "z": 150.002
+  },
+  "flatBounds": {
+   "w": 253.047787,
+   "h": 203.047787
+  },
+  "frame": {
+   "u": "X",
+   "v": "-Z",
+   "w": "Y",
+   "handedness": "right"
+  },
+  "holeCount": 0,
+  "defaultSetup": {
+   "punch": "std:punch-straight-88-r0.8",
+   "die": "std:die-v16-88",
+   "dieV": 16.0,
+   "dieAngle": 88,
+   "shoulderRadius": 1.5,
+   "punchTipRadius": 0.8
+  },
+  "perBend": {
+   "B1": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 192.0,
+    "forcePerMeter": 149.1,
+    "force": 28.6272,
+    "minLegOutside": 14.986387388711767
+   },
+   "B2": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 142.0,
+    "forcePerMeter": 149.1,
+    "force": 21.1722,
+    "minLegOutside": 14.986387388711767
+   },
+   "B3": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 192.0,
+    "forcePerMeter": 149.1,
+    "force": 28.6272,
+    "minLegOutside": 14.986387388711767
+   },
+   "B4": {
+    "bendAllowance": 4.523893421169302,
+    "bendDeduction": 3.476106578830697,
+    "includedAngle": 90,
+    "actualInnerRadius": 2.56,
+    "springback": 1.7100000000000002,
+    "overbendAngle": 91.71,
+    "loadedIncludedAngle": 88.29,
+    "ramDepthSharpShoulder": 4.2551553960644934,
+    "bendLength": 142.0,
+    "forcePerMeter": 149.1,
+    "force": 21.1722,
+    "minLegOutside": 14.986387388711767
+   }
+  },
+  "tolerances": {
+   "length": 0.05,
+   "angle": 0.5,
+   "forcePercent": 2,
+   "ramDepth": 0.3
+  },
+  "flangeCount": 5,
+  "expectedFlips": 0,
+  "wallLengths": [
+   192.0,
+   142.0
+  ],
+  "note": "bends 3/4 need a punch shorter than the clear width between standing walls"
+ }
 }

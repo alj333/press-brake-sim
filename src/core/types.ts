@@ -21,13 +21,23 @@
  *     +Y → up (ram moves along -Y to bend).
  *     +Z → along the bed, left→right as the operator sees it. Bend lines lie along Z.
  *   Backgauge X = distance from the bend line to the finger stop face (+X).
- *   Backgauge R = finger height (0 = finger top flush with die shoulder plane).
+ *   Backgauge R = Y of the finger profile ORIGIN (bottom of the stop face) relative to the
+ *     die shoulder plane, positive up. R = 0 ⇒ the stop face spans y ∈ [0, stopHeight] and
+ *     gauges a sheet lying on the die. Real R axes go below the die plane (rMin < 0).
  *
- * TOOL profile frames (2D cross-sections in the machine XY plane, extruded along Z):
+ * TOOL profile frames (2D cross-sections in the machine XY plane, extruded along Z).
+ * Outer boundaries are CCW (positive signed area); producers guarantee, consumers may assume.
  *   Punch : origin at the TIP point; +Y up toward the ram clamp; +X toward machine back.
+ *           The profile spans y ∈ [0, height]; the clamped tang top edge is at y = height.
  *   Die   : origin at the V CENTRE on the shoulder plane (top surface); +Y up.
- *   Finger: origin at the bottom of the STOP FACE (the face the sheet touches, at X=0);
- *           the finger body extends toward +X (behind the stop face); +Y up.
+ *           The profile spans y ∈ [-height, 0].
+ *   Finger: origin at the BOTTOM of the STOP FACE; the stop face is the segment
+ *           (0,0)–(0,stopHeight); the body extends toward +X (behind the stop face); +Y up.
+ *           The profile spans y ∈ [0, height].
+ *
+ * Polygon winding: Polygon2 outer boundaries CCW, holes CW; Polygon3 CCW about its normal.
+ * Two flat patterns are EQUIVALENT if related by a rigid 2D motion, or by a reflection with
+ * every bend direction inverted (tests compare modulo this equivalence).
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,29 +47,39 @@
 export interface Vec2 { x: number; y: number }
 export interface Vec3 { x: number; y: number; z: number }
 
-/** Closed polygon, implicit closing edge, no self-intersections. Winding is not assumed. */
+/** Closed polygon, implicit closing edge, no self-intersections. Outer boundary CCW. */
 export type Polygon2 = Vec2[];
 
-/** A planar closed polygon in 3D (all points coplanar). */
+/** A planar closed polygon in 3D (all points coplanar), CCW about its normal. */
 export type Polygon3 = Vec3[];
 
-/** 4x4 column-major transform (same layout as three.js Matrix4.elements). */
+/** 4x4 column-major transform (same layout as three.js Matrix4.elements), 16 numbers. */
 export type Mat4 = number[];
+
+/** Unit quaternion [x, y, z, w] (three.js order). */
+export type Quat = [number, number, number, number];
 
 export type BendDirection = 'up' | 'down';
 
 export type Language = 'en' | 'th';
+
+/** An i18n message with parameters — used for every warning / issue / collision text. */
+export interface Message {
+  key: string;                                  // e.g. 'warnings.gauge.outOfRange'
+  params?: Record<string, string | number>;     // interpolated by t(key, params)
+  severity?: 'info' | 'warning' | 'error';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Material
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Material {
-  id: string;                 // 'mild-steel' | 'stainless-304' | 'aluminium-5052' | custom
+  id: string;                 // 'std:mild-steel' | 'std:stainless-304' | 'custom:<uuid>'
   name: string;
-  tensileStrength: number;    // MPa (Rm), used for tonnage
+  tensileStrength: number;    // MPa (Rm), used for tonnage and natural radius
   kFactor: number;            // default k-factor for BA (0.33–0.5)
-  /** Springback in degrees at ri/t ≈ 1 for a 90° air bend; scaled by planner. */
+  /** Springback (deg) for a 90° air bend at ri/t = 1; scaled by angle and ri/t (see ARCHITECTURE). */
   springbackDeg: number;
   /** Minimum inner radius as a multiple of thickness (cracking limit). */
   minInnerRadiusFactor: number;
@@ -70,18 +90,26 @@ export interface Material {
 // Flat pattern & bends
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type BendSource = 'dxf' | 'step' | 'mesh' | 'user' | 'default';
+
 export interface BendLine {
   id: string;
   /** End points in FLAT frame (u,v). The line is the CENTRE of the bend zone. */
   p0: Vec2;
   p1: Vec2;
   direction: BendDirection;
-  /** Rotation from flat, 0 < angle < 180. 90 = right-angle bend. 135 = 45° included (acute). */
+  /** Rotation from flat, 0 < angle ≤ 180. 90 = right-angle bend. 135 = 45° included (acute).
+   *  180 = hem (see `hem`). */
   angle: number;
-  innerRadius: number;        // ri, mm
+  innerRadius: number;        // ri as designed (drawing), mm
   kFactor: number;            // used for bend allowance of this bend
-  /** Where the value came from — drives UI badges and confidence. */
-  source: 'dxf' | 'step' | 'mesh' | 'user' | 'default';
+  /** Where each attribute came from — drives UI badges and confidence. */
+  sources: { geometry: BendSource; angle: BendSource; radius: BendSource; direction: BendSource };
+  /** Operator trial-bend correction added to the overbend angle (deg). */
+  angleCorrection?: number;
+  /** Hem type when angle = 180. `hemGap` = open-hem gap (mm). */
+  hem?: 'closed' | 'open' | 'teardrop';
+  hemGap?: number;
 }
 
 export interface FlatPattern {
@@ -89,23 +117,31 @@ export interface FlatPattern {
   name: string;
   thickness: number;          // t, mm
   materialId: string;
-  /** Outer boundary in FLAT frame. Arcs already flattened to segments (chord tol ≤ 0.05 mm). */
+  /** Outer boundary in FLAT frame, CCW. Arcs already flattened to segments (chord tol ≤ 0.05 mm). */
   outline: Polygon2;
-  /** Inner boundaries (holes/cutouts). */
+  /** Inner boundaries (holes/cutouts), CW. */
   holes: Polygon2[];
   bends: BendLine[];
   /** Original units in the source file, for the UI. */
   sourceUnits?: 'mm' | 'in';
   /** Free-form provenance: filename, layers used, etc. */
   provenance?: Record<string, string>;
+  warnings?: Message[];
 }
 
-/** A flange = planar region of the flat pattern bounded by outline/bend lines. */
-export interface Flange {
-  id: string;
-  /** Region polygon in FLAT frame (portion of the outline between bend zones). */
+/** A planar region with holes, FLAT frame. */
+export interface Region2 {
   polygon: Polygon2;
   holes: Polygon2[];
+}
+
+/** A flange = planar material of the flat pattern between bend zones. May be several polygons
+ *  (e.g. the base plate on both sides of a short tab bend). */
+export interface Flange {
+  id: string;
+  regions: Region2[];
+  /** Total area of all regions (mm²). */
+  area: number;
   /** ids of bends that touch this flange. */
   bendIds: string[];
 }
@@ -127,34 +163,46 @@ export interface PartModel {
   bendAllowance: Record<string, number>;
   /** Bounding box of the flat pattern. */
   flatBounds: { min: Vec2; max: Vec2 };
+  warnings: Message[];
 }
 
-/** 0 = flat, 1 = fully bent, per bend id. Missing bend ⇒ 1 (fully bent). */
+/**
+ * Fraction of BendLine.angle per bend id: 0 = flat, 1 = fully bent. May exceed 1 during
+ * overbend (overbendAngle / angle). A MISSING bend id means 0 (flat).
+ * core-geometry exports flatState(part) and finishedState(part).
+ */
 export type FoldState = Record<string, number>;
 
 /** Output of the fold kinematics: geometry in PART frame for a given FoldState. */
 export interface FoldedGeometry {
-  /** One entry per flange: its mid-surface polygon placed in 3D + the sheet normal. */
+  /** One entry per flange: its mid-surface regions placed in 3D + the sheet normal. */
   flanges: Array<{
     flangeId: string;
     /** Transform FLAT(u,v,0) → PART for this flange (column-major 4x4). */
     transform: Mat4;
-    midSurface: Polygon3;      // polygon in PART frame (mid-surface)
-    holes: Polygon3[];
+    /** Regions in PART frame (mid-surface), same order as PartModel.flanges[i].regions. */
+    regions: Array<{ midSurface: Polygon3; holes: Polygon3[] }>;
     normal: Vec3;              // +w direction of this flange in PART frame
   }>;
-  /** One entry per bend: the curved zone, as a sweep of the bend line along an arc. */
+  /** One entry per bend: the curved zone (constant-arc-length model, see ARCHITECTURE). */
   bends: Array<{
     bendId: string;
     /** Current fold angle (deg) = angle * fraction. */
     currentAngle: number;
-    /** Arc centre line: axis through `axisPoint` along `axisDir` (unit), PART frame. */
+    /** Flat width of the zone (= bend allowance BA), mm. */
+    zoneWidth: number;
+    /** Arc centre line: axis through `axisPoint` along `axisDir` (unit), PART frame.
+     *  The child subtree is rotated by +currentAngle about axisDir (right-hand rule); axisDir is
+     *  chosen so this carries the child toward the parent's +w for 'up' and −w for 'down'.
+     *  When currentAngle < 0.01° the zone is a straight strip of width zoneWidth from startEdge
+     *  along `tangent`; axisPoint/toCentre are then undefined (set to the strip midpoint / +w). */
     axisPoint: Vec3;
     axisDir: Vec3;
-    /** Radius of the mid-surface arc (ri + t/2) and inner radius. */
+    /** Radii AT THE CURRENT FRACTION: rn = zoneWidth/rad(currentAngle), innerRadius = rn − k·t,
+     *  midRadius = innerRadius + t/2 (equal to ri + t/2 when fully bent). */
     midRadius: number;
     innerRadius: number;
-    /** Start edge of the zone (segment on the parent side) and unit direction of curvature. */
+    /** Start edge of the zone (segment on the parent side, mid-surface), PART frame. */
     startEdge: [Vec3, Vec3];
     /** Direction from the start edge toward the arc centre (unit, PART frame). */
     toCentre: Vec3;
@@ -172,17 +220,18 @@ export interface FoldedGeometry {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ToolProfile {
-  /** Closed cross-section polygon in the tool's local frame (see header). */
+  /** Closed CCW cross-section polygon in the tool's local frame (see header). */
   points: Polygon2;
 }
 
 export type ToolSource = 'standard' | 'custom';
 
+/** Ids: standard items 'std:<slug>', custom items 'custom:<uuid>'. */
 export interface ToolBase {
   id: string;
   name: string;
   source: ToolSource;
-  /** Height from the frame origin to the clamping reference (mm). */
+  /** Height of the profile: punch/finger y ∈ [0, height], die y ∈ [-height, 0]. */
   height: number;
   /** Max load per metre, kN/m. */
   maxLoadPerMeter: number;
@@ -198,9 +247,11 @@ export interface Punch extends ToolBase {
   kind: 'punch';
   family: PunchFamily;
   tipRadius: number;          // mm
-  tipAngle: number;           // included angle at the tip, deg (e.g. 88, 30)
+  tipAngle: number;           // included angle at the tip, deg (e.g. 88, 85, 30)
   /** Width of the body in X (mm) — for quick capacity display. */
   bodyWidth: number;
+  /** X of the tang (clamped part) centre relative to the tip; the ram clamp is drawn centred here. */
+  tangCentreX: number;
 }
 
 export type DieFamily = 'v' | 'multi-v' | 'hemming' | 'u' | 'custom';
@@ -233,8 +284,11 @@ export interface ToolLibrary {
   fingers: Finger[];
   materials: Material[];
   machines: Machine[];
-  /** Schema version for persistence migrations. */
-  version: 1;
+  /** Schema version for persistence migrations (current: 1). */
+  version: number;
+  /** Optimistic-concurrency revision for the shared server copy (PUT with a stale revision → 409). */
+  revision: number;
+  updatedAt: string;          // ISO date
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,21 +301,24 @@ export interface Machine {
   bedLength: number;          // Z extent, mm
   capacity: number;           // kN (e.g. 1000 kN = ~100 t)
   stroke: number;             // Y travel of the ram, mm
-  /** Open height: die shoulder plane → ram clamp bottom face at top-dead-centre, mm.
-   *  (Daylight with tools = daylight - punchHeight - dieHeight.) */
+  /** Open height: TABLE TOP (die-holder seat) → ram clamp bottom face at top-dead-centre, mm.
+   *  Tool stack = table.holderHeight + die.height + punch.height must be ≤ daylight, and
+   *  stroke ≥ (daylight − stack) + maxRamDepth + 5. validateMachine() checks this. */
   daylight: number;
   /** Distance from the bend line back to the side-frame throat (X), mm. */
   throatDepth: number;
-  /** Clear distance between side frames (Z), mm. Usually ≥ bedLength. */
+  /** Clear distance between side frames (Z), centred on the bed. Usually ≤ bedLength. */
   distanceBetweenFrames: number;
   ram: {
     /** Ram/upper beam thickness in X (mm), centred on the bend line. */
     thickness: number;
-    /** Height of the beam above the tool clamp (mm) — collision volume. */
+    /** Height of the beam above the clamp (mm) — collision volume. */
     height: number;
-    /** Clamp/holder block below the beam: X thickness and Y height. */
+    /** Clamp/holder block below the beam: X thickness, Y height, and how far its front face is
+     *  in front of the bend line (asymmetric Promecam-style clamps: front plate ~55 mm forward). */
     clampThickness: number;
     clampHeight: number;
+    clampFrontOffset: number;
     /** Speeds mm/s for animation. */
     speeds: { approach: number; bend: number; retract: number };
   };
@@ -276,16 +333,21 @@ export interface Machine {
   };
   backgauge: {
     xMin: number; xMax: number; // finger stop-face travel from bend line, mm
-    rMin: number; rMax: number; // finger height range, mm (0 = flush with die top)
+    rMin: number; rMax: number; // finger origin height range, mm (negative = below die plane)
     zMin: number; zMax: number; // finger travel along the bed, mm
     fingerCount: number;
     fingerId: string;           // Finger tool used
-    /** Backgauge beam behind the fingers: X depth from finger stop face + bodyDepth. */
+    /** Fingers can take different X / R values (X1/X2, R1/R2). */
+    independentX: boolean;
+    independentR: boolean;
+    /** Backgauge beam behind the fingers: X depth (from finger stop face + bodyDepth) and Y height. */
     beamDepth: number;
     beamHeight: number;
+    /** Retract the fingers by this much (+X) once the sheet is pinched (0 = no retract). */
+    retractAtPinch: number;
     speed: number;              // mm/s
   };
-  /** Per-tool Y-axis correction to apply to computed ram depth (calibration), mm. */
+  /** Y-axis correction to apply to computed ram depth (calibration), mm. */
   yCorrection: number;
 }
 
@@ -300,7 +362,9 @@ export interface ToolStation {
   /** Z range on the bed occupied by this station (mm). */
   zStart: number;
   zEnd: number;
-  /** Punch mounted reversed (profile mirrored in X, e.g. gooseneck relief to the front). */
+  /** Punch segments left→right (mm, from punch.segmentLengths); sum ≈ zEnd − zStart. Empty ⇒ one piece. */
+  segments: number[];
+  /** Tool mounted reversed (profile mirrored in X, e.g. gooseneck relief to the back). */
   punchFlipped: boolean;
   dieFlipped: boolean;
 }
@@ -315,62 +379,98 @@ export interface ToolSetup {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * How the part is placed for a bend step. The part is positioned so that the
- * bend line lies along machine Z at X=0, the sheet rests on the die shoulder plane,
- * and the GAUGED side (toward +X, the backgauge) is `gaugedFlangeId`.
+ * How the part is placed for a bend step (BEFORE the bend, all previous bends applied).
+ * The rotation is fully determined: the bend line lies along machine Z at X = 0, the sheet
+ * rests on the die shoulder plane (lower face at Y = 0), and the CONCAVE side of this bend
+ * faces up (+Y, toward the punch): with n = current normal of the parent flange in PART frame
+ * (from foldGeometry before this bend) and d = +1 for 'up' / −1 for 'down', the placement maps
+ * d·n → +Y. The only free choice is which adjacent flange faces the backgauge (+X).
  */
 export interface Placement {
   bendId: string;
-  /** Flange that lies toward the backgauge (+X) and touches the fingers. */
+  /** Flange that lies toward the backgauge (+X). */
   gaugedFlangeId: string;
   /** Flange on the operator side (-X). */
   frontFlangeId: string;
-  /** Part turned over (which sheet face is up). false = flat-pattern +w faces up. */
+  /** Informational: true when the root flange's +w maps to −Y in this placement. */
   flipped: boolean;
-  /** Transform PART → MACHINE for the part BEFORE this bend (all previous bends applied). */
+  /** Transform PART → MACHINE for the part before this bend (fold state: previous bends at 1). */
   transform: Mat4;
-  /** Z offset of the part so it sits within the chosen station. */
-  stationId: string;
+  /** Z of the part's left-most point relative to the station's zStart (mm). */
+  partZOffset: number;
 }
+
+export type ObstacleKind =
+  | 'punch' | 'ram' | 'clamp' | 'die' | 'holder' | 'table'
+  | 'finger' | 'backgauge-beam' | 'frame' | 'self';
 
 export interface CollisionReport {
   /** What collided with the part. */
-  with: 'punch' | 'ram' | 'clamp' | 'die' | 'holder' | 'table' | 'finger' | 'backgauge-beam' | 'frame' | 'self';
+  with: ObstacleKind;
   /** Fold fraction of the current bend at which it happens (0 = at placement, 1 = at target). */
   atFraction: number;
   /** Approximate location in MACHINE frame. */
   location: Vec3;
-  /** Penetration depth estimate, mm. */
+  /** Penetration depth estimate, mm (reported only when > 0.2 mm). */
   depth: number;
   severity: 'error' | 'warning';
-  messageKey: string;         // i18n key
+  message: Message;
 }
+
+/** One backgauge finger setting. */
+export interface FingerSetting { x: number; r: number; z: number }
+
+export type GaugeContact = 'cut-edge' | 'flange-face' | 'radius' | 'none';
+
+/** How the operator turns the part between two steps (rigid motion between placements). */
+export type Turn = 'none' | 'rotate180' | 'flip-front-back' | 'flip-end-for-end';
 
 export interface BendStep {
   index: number;
+  /** 'bend' = air bend; 'hem-flatten' = flattening a pre-bent hem on a hemming station. */
+  kind: 'bend' | 'hem-flatten';
   bendId: string;
   stationId: string;
+  punchId: string; dieId: string;
+  punchName: string; dieName: string;
   placement: Placement;
-  /** Target angle (deg from flat) and the angle to bend to including springback. */
+  /** Angles (deg): from flat, and included (what controllers display: 180 − angle). */
   targetAngle: number;
-  overbendAngle: number;
+  includedAngle: number;
   springback: number;
-  /** Ram depth below die shoulder plane at overbendAngle (mm, positive = below). */
+  overbendAngle: number;
+  loadedIncludedAngle: number;
+  /** Inner radius that actually forms in air bending (max of natural radius, punch tip, material min). */
+  actualInnerRadius: number;
+  /** Ram depth below the die shoulder plane at overbendAngle (mm, positive = below; ≥ −t). */
   ramDepth: number;
-  /** Required force for this bend (kN) and per metre (kN/m). */
+  /** Ram Y (clamp bottom) at pinch (punch tip touching the sheet) and the upper limit to retract to. */
+  pinchY: number;
+  ramUpperLimit: number;
+  /** Required force (kN), per metre (kN/m), and as % of the weakest tool rating. */
   force: number;
   forcePerMeter: number;
-  /** Bend line length (mm). */
+  loadPercentOfTool: number;
+  /** Bend line length (mm), punch length used, part Z offset from the station start. */
   bendLength: number;
-  /** Backgauge settings. */
-  backgauge: { x: number; r: number; z: number[] } | null;
-  /** Length of the gauged flange from the bend line to the stop face (mm). */
-  gaugedFlangeLength: number;
+  punchLength: number;
+  segments: number[];
+  partZOffset: number;
+  /** Backgauge settings per finger (empty ⇒ no gauging possible). */
+  backgauge: FingerSetting[];
+  gaugeContact: GaugeContact;
+  /** Gauged leg: outside dimension to the virtual sharp / tangent (what is checked with a caliper). */
+  gaugedFlangeOutside: number;
+  bendDeduction: number;
+  dimensionRef: 'virtual-sharp' | 'tangent';
+  /** Orientation in words for the printed program. */
+  orientation: { faceUp: 'top' | 'bottom'; backFlangeId: string };
   /** Part manipulation relative to the previous step. */
-  manipulation: { flip: boolean; rotate180: boolean; stationChange: boolean };
+  manipulation: { turn: Turn; stationChange: boolean };
+  /** True when 180 − overbendAngle ≤ die.vAngle + 1 (sheet bottoms on the V faces). */
+  bottoming: boolean;
   collisions: CollisionReport[];
-  /** i18n keys for advisory notes (short flange, tonnage near limit, etc). */
-  warnings: string[];
+  warnings: Message[];
 }
 
 export interface BendProgram {
@@ -384,21 +484,21 @@ export interface BendProgram {
   /** Max force across steps (kN), vs machine capacity. */
   maxForce: number;
   feasible: boolean;
-  warnings: string[];
+  warnings: Message[];
   /** Search statistics for the UI. */
   stats: { sequencesEvaluated: number; timeMs: number };
 }
 
 /** Pure description of the sequence search options. */
 export interface PlannerOptions {
-  /** Fold sampling for collision sweeps (deg). */
+  /** Fold sampling for collision sweeps (deg). Default 5. */
   sweepStepDeg: number;
-  /** Max sequences to evaluate before falling back to greedy. */
+  /** Max sequences to evaluate before falling back to beam search. */
   maxSequences: number;
   /** Cost weights. */
   weights: { flip: number; rotate: number; stationChange: number; shortFlange: number; collisionWarning: number };
-  /** Minimum gauged flange length as a multiple of V width (default 0.7). */
-  minFlangeFactor: number;
+  /** Warning multiplier on the minimum leg length (default 1.15). */
+  minFlangeWarnFactor: number;
   /** Fixed order provided by the user (bend ids) — planner only computes placements. */
   fixedOrder?: string[];
 }
@@ -414,13 +514,17 @@ export interface SimKeyframe {
   phase: SimPhase;
   /** 0..1 within the phase. */
   t: number;
-  /** Ram Y position (clamp bottom) in MACHINE frame. */
+  /** Seconds from program start, monotonic (derived from travel ÷ machine speeds). */
+  timeS: number;
+  /** Ram Y position (clamp bottom face) in MACHINE frame. */
   ramY: number;
   /** Fold state of the whole part at this instant. */
   foldState: FoldState;
-  /** Transform PART → MACHINE at this instant. */
+  /** Transform PART → MACHINE at this instant — FINAL (bendPose already applied); the sim uses it verbatim. */
   partTransform: Mat4;
-  backgauge: { x: number; r: number; z: number[] } | null;
+  /** Decomposed pose for interpolation (lerp position, slerp quaternion). */
+  pose: { position: Vec3; quaternion: Quat };
+  backgauge: FingerSetting[];
   /** Collisions active at this instant (for highlighting). */
   collisions: CollisionReport[];
 }
@@ -429,22 +533,24 @@ export interface SimKeyframe {
 // Import results
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Triangle soup with optional B-rep face grouping (STEP) — the mesh importers' output. */
+/**
+ * Triangle soup with optional B-rep face grouping (STEP) — the mesh importers' output.
+ * Vertices are NOT guaranteed shared; consumers needing topology weld by position (1e-3 mm).
+ * faceGroups are TRIANGLE indices, inclusive, over the merged buffer.
+ */
 export interface TriangleMesh {
   positions: Float32Array;    // xyz triplets
   indices: Uint32Array;       // triangle index triplets
   normals?: Float32Array;     // per-vertex, optional
-  /** For STEP: triangle ranges per B-rep face [first, last] inclusive (triangle indices). */
   faceGroups?: Array<{ first: number; last: number }>;
   units: 'mm';
   name: string;
 }
 
-/** Sheet-metal feature recognition result. */
+/** Sheet-metal feature recognition result. All 3D data in the MESH's own frame. */
 export interface RecognizedSheet {
   thickness: number;
   bendCount: number;
-  /** Detected bends in PART frame (3D) — before unfolding. */
   bends3d: Array<{
     id: string;
     axisPoint: Vec3;
@@ -460,17 +566,29 @@ export interface RecognizedSheet {
   faces: Array<{ id: string; normal: Vec3; origin: Vec3; outline: Polygon3; holes: Polygon3[] }>;
   /** The unfolded flat pattern derived from the faces + bends. */
   flat: FlatPattern;
-  /** Confidence 0..1 and human-readable issues (i18n keys). */
+  /** Transform MESH frame → PART frame of buildPartModel(flat) fully folded. */
+  meshToPart: Mat4;
+  /** Confidence 0..1 and issues. */
   confidence: number;
-  issues: string[];
+  issues: Message[];
+}
+
+/** Result of aligning recognised 3D bends with a DXF flat pattern. */
+export interface MatchResult {
+  flat: FlatPattern;
+  pairs: Array<{ dxfBendId: string; recBendId: string }>;
+  unmatchedDxf: string[];
+  unmatchedRec: string[];
+  mirrored: boolean;
+  transform: { rotationDeg: number; translation: Vec2; mirrored: boolean };
+  warnings: Message[];
 }
 
 export interface ImportResult {
   flat?: FlatPattern;
   mesh?: TriangleMesh;
   recognized?: RecognizedSheet;
-  /** i18n keys of problems that did not prevent import. */
-  warnings: string[];
+  warnings: Message[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -478,7 +596,7 @@ export interface ImportResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Project {
-  version: 1;
+  version: number;
   name: string;
   part: PartModel | null;
   setup: ToolSetup;
@@ -487,4 +605,6 @@ export interface Project {
   plannerOptions: PlannerOptions;
   program: BendProgram | null;
   language: Language;
+  /** Snapshot of every library item the project references (custom tools travel with the file). */
+  libraryOverlay: { punches: Punch[]; dies: Die[]; fingers: Finger[]; materials: Material[]; machines: Machine[] };
 }

@@ -1,50 +1,118 @@
 {
+ "name": "acute-bracket",
+ "thickness": 1.5,
+ "kFactor": 0.44,
+ "material": {
+  "id": "std:mild-steel",
+  "Rm": 420.0,
+  "k": 0.44,
+  "sb": 1.5,
+  "minR": 0.8
+ },
+ "flat": {
+  "id": "acute-bracket",
   "name": "acute-bracket",
   "thickness": 1.5,
-  "kFactor": 0.44,
-  "flat": {
-    "name": "acute-bracket",
-    "thickness": 1.5,
-    "width": 60,
-    "length": 99.08938009881547,
-    "outline": [
-      [
-        0,
-        0
-      ],
-      [
-        99.08938009881547,
-        0
-      ],
-      [
-        99.08938009881547,
-        60
-      ],
-      [
-        0,
-        60
-      ]
-    ],
-    "holes": [],
-    "bends": [
-      {
-        "id": "B1",
-        "u": 59.544690049407734,
-        "direction": "up",
-        "angle": 135,
-        "innerRadius": 1.5,
-        "kFactor": 0.44,
-        "bendAllowance": 5.089380098815465,
-        "p0": [
-          59.544690049407734,
-          0
-        ],
-        "p1": [
-          59.544690049407734,
-          60
-        ]
-      }
-    ]
+  "materialId": "std:mild-steel",
+  "outline": [
+   {
+    "x": 0,
+    "y": 0
+   },
+   {
+    "x": 99.08938,
+    "y": 0
+   },
+   {
+    "x": 99.08938,
+    "y": 60
+   },
+   {
+    "x": 0,
+    "y": 60
+   }
+  ],
+  "holes": [],
+  "bends": [
+   {
+    "id": "B1",
+    "p0": {
+     "x": 59.54469,
+     "y": 0
+    },
+    "p1": {
+     "x": 59.54469,
+     "y": 60
+    },
+    "direction": "up",
+    "angle": 135,
+    "innerRadius": 1.5,
+    "kFactor": 0.44,
+    "sources": {
+     "geometry": "dxf",
+     "angle": "dxf",
+     "radius": "dxf",
+     "direction": "dxf"
+    }
+   }
+  ],
+  "sourceUnits": "mm"
+ },
+ "expected": {
+  "bendCount": 1,
+  "directions": {
+   "B1": "up"
   },
-  "bendCount": 1
+  "bendAllowance": {
+   "B1": 5.089380098815465
+  },
+  "foldedBounds": {
+   "x": 60.001,
+   "y": 31.285,
+   "z": 60.002
+  },
+  "flatBounds": {
+   "w": 99.08938,
+   "h": 60
+  },
+  "frame": {
+   "u": "X",
+   "v": "-Z",
+   "w": "Y",
+   "handedness": "right"
+  },
+  "holeCount": 0,
+  "defaultSetup": {
+   "punch": "std:punch-straight-88-r0.8",
+   "die": "std:die-v12-88",
+   "dieV": 12.0,
+   "dieAngle": 88,
+   "shoulderRadius": 1.0,
+   "punchTipRadius": 0.8
+  },
+  "perBend": {
+   "B1": {
+    "bendAllowance": 5.089380098815465,
+    "bendDeduction": 0.9106199011845346,
+    "includedAngle": 45,
+    "actualInnerRadius": 1.92,
+    "springback": 2.5650000000000004,
+    "overbendAngle": 137.565,
+    "loadedIncludedAngle": 42.435,
+    "ramDepthSharpShoulder": 7.925039778751348,
+    "bendLength": 60.0,
+    "forcePerMeter": 111.82499999999999,
+    "force": 6.709499999999999,
+    "minLegOutside": 19.578738778402318
+   }
+  },
+  "tolerances": {
+   "length": 0.05,
+   "angle": 0.5,
+   "forcePercent": 2,
+   "ramDepth": 0.3
+  },
+  "flangeCount": 2,
+  "needsAcuteTooling": true
+ }
 }
