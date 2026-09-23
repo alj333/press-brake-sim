@@ -1,0 +1,186 @@
+/* sim-3d — viewport, section inset and transport bar styling (class prefix pbsim-). */
+
+.pbsim-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  background: #e9ecf0;
+  border-radius: 6px;
+}
+
+.pbsim-viewport canvas {
+  display: block;
+  outline: none;
+}
+
+.pbsim-caption {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1f2933;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #cfd5dc;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.pbsim-collisions {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  max-width: 46%;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #1f2933;
+  background: rgba(255, 245, 245, 0.95);
+  border: 1px solid #d63b3b;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.pbsim-collisions-title {
+  font-weight: 600;
+  color: #b42323;
+  margin-bottom: 2px;
+}
+
+.pbsim-collisions ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.pbsim-col-error { color: #b42323; }
+.pbsim-col-warning { color: #9a5b00; }
+.pbsim-muted { color: #6b7381; }
+
+.pbsim-section-inset {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: min(46%, 520px);
+  height: min(48%, 380px);
+  border: 1px solid #aeb6c0;
+  border-radius: 4px;
+  background: #f7f8fa;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.pbsim-section {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pbsim-transport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #1f2933;
+  background: #f3f4f6;
+  border: 1px solid #d5dae0;
+  border-radius: 6px;
+}
+
+.pbsim-transport-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pbsim-transport-status {
+  min-height: 18px;
+  font-size: 12px;
+}
+
+.pbsim-btn {
+  padding: 4px 10px;
+  font: inherit;
+  color: #1f2933;
+  background: #ffffff;
+  border: 1px solid #b8c0ca;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pbsim-btn:hover:not(:disabled) { background: #eef1f5; }
+.pbsim-btn:disabled { opacity: 0.5; cursor: default; }
+.pbsim-btn-primary { min-width: 92px; font-weight: 600; }
+.pbsim-btn-on { background: #2f5f9e; color: #fff; border-color: #2f5f9e; }
+.pbsim-btn-on:hover:not(:disabled) { background: #264d80; }
+
+.pbsim-scrubber {
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+
+.pbsim-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+  text-align: center;
+}
+
+.pbsim-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pbsim-field select {
+  font: inherit;
+  padding: 2px 4px;
+}
+
+.pbsim-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.pbsim-step-btn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pbsim-step-btn:hover:not(:disabled) { background: #e8ecf1; }
+.pbsim-step-btn:disabled { cursor: default; }
+.pbsim-step-current .pbsim-step-btn { background: #dbe7f6; border-color: #9cb8dc; }
+.pbsim-step-title { font-weight: 600; }
+.pbsim-step-meta { color: #4b5563; font-size: 12px; }
+.pbsim-step-flags { margin-left: auto; font-size: 12px; display: inline-flex; gap: 8px; }
+
+@media (prefers-color-scheme: dark) {
+  .pbsim-transport { color: #e5e7eb; background: #1f2028; border-color: #2e303a; }
+  .pbsim-btn { color: #e5e7eb; background: #2a2c36; border-color: #454857; }
+  .pbsim-btn:hover:not(:disabled) { background: #343744; }
+  .pbsim-btn-on { background: #3b6fb6; border-color: #3b6fb6; }
+  .pbsim-step-btn:hover:not(:disabled) { background: #2a2c36; }
+  .pbsim-step-current .pbsim-step-btn { background: #253650; border-color: #3b6fb6; }
+  .pbsim-step-meta { color: #a5adba; }
+  .pbsim-muted { color: #9ca3af; }
+}
