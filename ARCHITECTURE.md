@@ -17,11 +17,11 @@ Deployment: Node/Express serving `dist/` + a tiny JSON API for the shared tool l
 | `core-geometry` | `src/core/geom/**`, `src/core/bend/**`, `src/core/part/**` | types, testing |
 | `import-files` | `src/core/import/**` except `recognize/` (incl. `*.worker.ts`) | types, geom |
 | `recognize-3d` | `src/core/import/recognize/**` | types, geom, bend, part, import |
-| `tooling-machine` | `src/core/tools/**`, `src/core/machine/**`, `src/core/library/**` | types, geom |
+| `tooling-machine` | `src/core/tools/**`, `src/core/machine/**`, `src/core/library/**` | types, geom, bend (`recommendedV`) |
 | `planner` | `src/core/planner/**` | types, geom, bend, part, tools, machine |
 | `sim-3d` | `src/sim/**` | types, part, planner (timeline), tools, machine |
 | `ui` | `src/app/**`, `src/i18n/**`, `src/index.css` | everything above |
-| integrator | `src/App.tsx`, `src/main.tsx`, `src/core/index.ts`, `src/core/testing/**`, `public/**`, `index.html`, `e2e/**`, `server/**`, `Dockerfile`, `package.json`, `vite.config.ts`, `tsconfig*.json` | — |
+| integrator | `src/main.tsx`, `src/core/index.ts`, `src/core/testing/**`, `public/**`, `index.html`, `e2e/**`, `playwright.config.ts`, `server/**`, `Dockerfile`, `docker-compose.yml`, `docker-entrypoint.sh`, `package.json`, `vite.config.ts`, `tsconfig*.json`, `README.md` | — |
 
 Tests live next to the code as `*.test.ts` (vitest). Fixtures in `samples/` (shared, read-only)
 loaded through `src/core/testing/fixtures.ts` (`loadTruth(name)` → `{ flat: FlatPattern, expected }`,
@@ -76,16 +76,24 @@ L bend length (mm), rs die shoulder radius, β = vAngle/2.
   V16 t2 ri2.5 → 4.136; V50 t6 ri8 → 13.20; V12 t1.5 ri1.5 θi 45 → 8.15. `D(θi = 180) = −t`
   (tip on the sheet top at the pinch point) — D is legitimately NEGATIVE for the first ~40° of
   fold and for shallow finished bends. Clamp only to `D ≥ −t`. `ramDepth` in BendStep includes
-  `machine.yCorrection`; ramY(clamp bottom) = punch.height − D.
+  `machine.yCorrection`; ramY(clamp bottom) = punch.height − D. The fillet contact needs the die
+  V half-angle β, so the signature is `ramDepth(V, t, ri, includedDeg, rs = 0, vAngleDeg = 88)`
+  (same trailing parameter for `punchTipY`): callers with 85° / 30° dies pass `die.vAngle`.
 - Springback: `sb = material.springbackDeg · (0.5 + 0.5·(ri_actual/t)) · (θ/90)` clamped to
   [0.3°, 12°]; `overbendAngle = θ + sb + (bend.angleCorrection ?? 0)`. Ram depth is computed for
   the overbend angle (`loadedIncludedAngle = 180 − overbendAngle`).
-- Tool angle feasibility (hard constraint): `punch.tipAngle + 1 ≤ 180 − overbendAngle` and
-  `die.vAngle + 1 ≤ 180 − overbendAngle`; otherwise `bottoming = true`, `warnings.tool.angle`,
-  and if no mounted station passes the program is infeasible.
+- Tool angle feasibility (hard constraint, the physical fit): `punch.tipAngle ≤ 180 − overbendAngle`
+  and `die.vAngle ≤ 180 − overbendAngle`; a station failing it gets `warnings.tool.angle` (error)
+  and if no mounted station passes the program is infeasible (e.g. the acute bracket or stainless
+  304 on 88° tools). The 1° margin is reported, not enforced: `bottoming = true` +
+  `warnings.tool.bottoming` (info, small cost) when `180 − overbendAngle ≤ die.vAngle + 1` — every
+  standard 90° bend in mild steel on 88° tools (loaded 88.29°) is such a case; 85° tools avoid it.
+  (`toolAngleFeasible` in `src/core/bend` still implements the strict +1° test for callers that
+  want it.)
 - Minimum leg (both legs, outside dimension to the virtual sharp): the leg edge must stay on the
-  shoulder until the loaded angle: `Lmin = (V/2)/sin(θi_loaded/2) + rs + 2`. Error below Lmin,
-  warning below `minFlangeWarnFactor·Lmin` (default 1.15). Evaluate at the finger/leg Z positions.
+  shoulder until the loaded angle: `Lmin = (V/2)/sin(θi_loaded/2) + rs + 2`. Error below Lmin
+  (the bend is infeasible on that station — mount a narrower V), warning below
+  `minFlangeWarnFactor·Lmin` (default 1.15). Evaluate at the finger/leg Z positions.
 - V selection: prefer the mounted die with V closest to `8·t` (t ≤ 3), `10·t` (3–6), `12·t`
   (> 6) among the dies passing the angle constraint; acute bends need the acute (30°) dies.
 - Hems (angle = 180): the planner expands a hem into `preBend` (acute station, 150° from flat) +
@@ -178,9 +186,13 @@ stays at X = 0 for every f, and at f = 0 the pose equals the placement. `punchTi
    progress callback and must finish < 2 s for the box on a 2-CPU machine.
 6. **Program assembly**: every BendStep field in types.ts (included angles, actual radius, ram
    depth/pinchY/ramUpperLimit = part insertion height + 20 mm ≤ TDC, force and % of tool,
-   punchLength/segments/partZOffset, per-finger backgauge, gaugeContact, outside dimension +
-   BD + dimensionRef, orientation words, manipulation, bottoming, collisions, warnings).
-   `feasible` = no 'error' collisions, all forces ≤ capacity and tool ratings, angle-feasible.
+   punchLength/segments/partZOffset (the punch piece is centred in the station, the part placed
+   relative to station.zStart), per-finger backgauge, gaugeContact, outside dimension +
+   BD + dimensionRef (`gaugedFlangeOutside` = the caliper check dimension from this bend's virtual
+   sharp/tangent to the gauged edge or face), orientation words, manipulation, bottoming,
+   collisions, warnings).
+   `feasible` = no 'error' collisions, all forces ≤ capacity and tool ratings, angle-feasible,
+   every leg ≥ Lmin, hems have a hemming station.
 7. **Timeline**: `buildTimeline(program, part, material, machine, library): SimKeyframe[]` —
    phases per step: position (part lerps in from a parked pose 300 mm in front and above),
    gauge (fingers to X/R/Z, part slides +X to touch), approach (ramY TDC/upper limit → pinchY),
@@ -272,9 +284,10 @@ Standard library (parametric generators, all profiles closed, CCW, mm; ids `std:
 
 ## Simulation (`src/sim/`)
 
-R3F scene: `<MachineModel>` (bed, table, holder, ram beam + asymmetric clamp at ramY, side
-frames, backgauge beam + fingers per `FingerSetting`), `<ToolModel>` (extruded profiles per
-station, punch follows ramY, drawn centred at `tangCentreX`), `<PartMesh>`: ONE BufferGeometry
+R3F scene: `<MachineModel>` (bed, table, holder, ram beam + asymmetric clamp at ramY — the CLAMP is
+centred at the punch's `tangCentreX`, side frames, backgauge beam + fingers per `FingerSetting`),
+`<ToolModel>` (extruded profiles per station, punch at its tip origin following ramY, mirrored in
+X when flipped), `<PartMesh>`: ONE BufferGeometry
 per flange built once per PartModel in FLAT coordinates (regions extruded ±t/2, holes via
 `THREE.ShapeUtils.triangulateShape`), positioned every frame by `FoldedGeometry.flanges[].transform`
 (`matrixAutoUpdate = false`); bend zones are regenerated in place into preallocated attributes
@@ -309,12 +322,23 @@ string goes through it; `Message` objects render via `t(m.key, m.params)`. Thai 
 
 ## Server & Docker (integrator)
 
-`server/index.ts` (Express 5): static `dist/`, `GET /api/library` → JSON file at
-`$DATA_DIR/library.json` (404 → client uses defaults), `PUT /api/library` (validate shape,
-revision check → 409 with current body, atomic write, bump revision), `GET /api/health`.
-Port `$PORT` (8080). `Dockerfile`: multi-stage node:22-alpine build → runtime with `dist/` +
-`server/`; `VOLUME /data`; `docker-compose.yml` for the NAS. Vite dev proxies `/api` →
-`localhost:8080`. `worker: { format: 'es' }` in vite.config.ts.
+`server/index.ts` + `server/app.ts` (`createApp({ distDir, dataDir })`, Express 5, run with tsx):
+static `dist/` with SPA fallback and cache headers (hashed `/assets` immutable, html no-cache),
+`GET /api/library` → JSON file at `$DATA_DIR/library.json` (404 → client uses defaults),
+`PUT /api/library` (structural validation in `server/library-shape.ts` → 400, revision check →
+409 with the current body, serialised + atomic write (temp file + rename), stored with
+`revision + 1` and a fresh `updatedAt`, 200 with the stored body), `GET /api/health`.
+Port `$PORT` (8080), `$DATA_DIR` (./data), `$DIST_DIR` (./dist). Tested end to end with the real
+`LibraryStore` in `src/core/testing/server.test.ts`. `Dockerfile`: multi-stage node:22-alpine
+(build → production deps + tsx → runtime with `dist/`, `server/`, `docker-entrypoint.sh` that
+chowns `/data` and drops to the `node` user); `VOLUME /data`, `EXPOSE 8080`, `HEALTHCHECK` on
+`/api/health`; `docker-compose.yml` (service `pbsim`, `8080:8080`, `./data:/data`, restart
+unless-stopped) for Synology Container Manager. Vite dev and preview proxy `/api` →
+`localhost:8080`; `worker: { format: 'es' }`; vendor chunks `three` / `react` / `vendor` via
+rolldown `codeSplitting` groups. Fonts: Sarabun Regular/Bold woff2 (OFL) in `public/fonts/`.
+`src/core/index.ts` re-exports every core barrel. `npm run e2e` = Playwright boot test of the
+production build (`e2e/boot.spec.ts`); `scratch/boot-check.mjs` is the headless smoke used at
+integration.
 
 ## Public API (barrel exports — exact names)
 
@@ -326,9 +350,9 @@ Port `$PORT` (8080). `Dockerfile`: multi-stage node:22-alpine build → runtime 
   arcToPoints, bulgeArcToPoints, transformPolygon, projectToXY, sharedBoundaryLength,
   convexHull, thickenSegment, clipToZ`).
   `src/core/bend`: `bendAllowance, outsideSetback, bendDeduction, neutralRadius, midRadius,
-  airBendForce, hemFlattenForce, ramDepth(vWidth, t, ri, includedAngleDeg, shoulderRadius?),
-  punchTipY, actualInnerRadius, springback, overbend, recommendedV, minLeg, legCheck,
-  toolAngleFeasible`.
+  airBendForce, hemFlattenForce, ramDepth(vWidth, t, ri, includedAngleDeg, shoulderRadius?,
+  vAngleDeg?), punchTipY(…, vAngleDeg?), actualInnerRadius, springback, overbend, recommendedV,
+  minLeg, legCheck, toolAngleFeasible`.
   `src/core/part`: `buildPartModel(flat): PartModel`, `foldGeometry(part, state):
   FoldedGeometry`, `flatState(part)`, `finishedState(part)`, `bendPose(...)`,
   `partSilhouette(folded, partToMachine, thickness, zBand?): Array<{polygon, zRange}>`,
@@ -361,3 +385,35 @@ Port `$PORT` (8080). `Dockerfile`: multi-stage node:22-alpine build → runtime 
   `box-4-flange`, `tabbed-plate`), on both `.step` (faceGroups) and `.stl` (no groups).
 - i18n keys are `dot.separated`, English fallback; warning/collision keys live under
   `warnings.*` and `collisions.*` and carry `params`.
+
+## Integration notes (resolved contract questions)
+
+Conventions settled at integration; the module specs in `docs/specs/` and the comments in
+`src/core/types.ts` carry the details.
+
+- `FoldedGeometry.bends` has one entry per bend that touches material (look up by `bendId`);
+  straight zones (`currentAngle < 0.01°`) report `Infinity` radii — branch on `isStraightZone`.
+  `PartModel.bendAllowance` is NaN for a bend with invalid inputs (UI validates before planning).
+- `bendPose(placement, folded, bendId, fraction, punchTipY, t)`: `folded` must have been computed
+  for that fraction (a mismatch throws); the translation is `T(−apex.x)` (= +BA/2 when the child
+  faces +X, −BA/2 when it faces −X).
+- Flat dies (hemming, custom without a notch): `vWidth 0 / vAngle 180`; hemming stations are
+  identified by `die.family === 'hemming'` and use `hemFlattenForce`; `toolLoadCheck` rejects a
+  non-finite load. `Finger.maxLoadPerMeter` is 0 (unused).
+- `validateMachine` uses the nominal 120 + 60 stack and 15 mm ram depth; `validateSetup` (per
+  station) and `strokeCheck` (per bend) are the exact checks. The ram clamp obstacle is centred on
+  the mounted punch's `tangCentreX`; the ram beam stays centred on the bend line.
+- `Turn`: 'none' for translations and yaws ≤ 45°, 'rotate180' for any larger rotation about Y.
+- `CollisionReport` carries the obstacle kind only; the sim identifies a report across keyframes by
+  (kind, severity, atFraction, message.key) and highlights per kind.
+- Recognition: planar tolerance 0.2° (not 1°) so fine tessellations keep their first bend facet;
+  `bends3d[].axisDir` follows the fold model's right-hand convention; `ImportResult.recognized` is
+  filled by the UI (`recognizeSheet` + `matchToDxf`), not by `importFile`; `FlatPattern.sourceUnits`
+  is 'mm' for every non-inch unit (the real unit in `provenance.units`).
+- `LibraryStore.save()` conflicts are resolved per item (ours win by id) — there are no per-item
+  timestamps; the server answers 404 to the very first `GET /api/library` by design (browsers log
+  it as a console error once).
+- Project files carry no separate sheet thickness (it lives in `part.flat.thickness`); the UI keeps
+  a `thickness` store field for DXF imports made before a part exists.
+- The hat-channel sample is infeasible on the standard 60 mm wide V16 die body (the brim lands
+  inside the die body — a real collision); the planner test also shows it feasible on a 50 mm body.

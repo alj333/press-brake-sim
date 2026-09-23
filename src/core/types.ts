@@ -159,7 +159,9 @@ export interface PartModel {
   flanges: Flange[];
   rootFlangeId: string;
   links: FlangeLink[];
-  /** Bend allowance per bend id (mm), computed from angle/ri/k/t. */
+  /** Bend allowance per bend id (mm), computed from angle/ri/k/t. NaN for a bend with non-finite
+   *  angle/radius/k/end points (such a bend gets no zone and a bendNoMaterial warning) — validate
+   *  bend inputs in the UI before planning. */
   bendAllowance: Record<string, number>;
   /** Bounding box of the flat pattern. */
   flatBounds: { min: Vec2; max: Vec2 };
@@ -184,7 +186,10 @@ export interface FoldedGeometry {
     regions: Array<{ midSurface: Polygon3; holes: Polygon3[] }>;
     normal: Vec3;              // +w direction of this flange in PART frame
   }>;
-  /** One entry per bend: the curved zone (constant-arc-length model, see ARCHITECTURE). */
+  /** One entry per bend that touches material (bends touching no material at all are omitted — look
+   *  entries up by bendId, do not assume bends.length === flat.bends.length). Bends that are not tree
+   *  links (no material on one side, cycle, disconnected flange) are straight strips that ignore the
+   *  FoldState. The curved zone follows the constant-arc-length model (see ARCHITECTURE). */
   bends: Array<{
     bendId: string;
     /** Current fold angle (deg) = angle * fraction. */
@@ -199,7 +204,8 @@ export interface FoldedGeometry {
     axisPoint: Vec3;
     axisDir: Vec3;
     /** Radii AT THE CURRENT FRACTION: rn = zoneWidth/rad(currentAngle), innerRadius = rn − k·t,
-     *  midRadius = innerRadius + t/2 (equal to ri + t/2 when fully bent). */
+     *  midRadius = innerRadius + t/2 (equal to ri + t/2 when fully bent). Both are Infinity for a
+     *  straight zone (currentAngle < 0.01°) — consumers branch on isStraightZone(b) first. */
     midRadius: number;
     innerRadius: number;
     /** Start edge of the zone (segment on the parent side, mid-surface), PART frame. */
@@ -250,7 +256,8 @@ export interface Punch extends ToolBase {
   tipAngle: number;           // included angle at the tip, deg (e.g. 88, 85, 30)
   /** Width of the body in X (mm) — for quick capacity display. */
   bodyWidth: number;
-  /** X of the tang (clamped part) centre relative to the tip; the ram clamp is drawn centred here. */
+  /** X of the tang (clamped part) centre relative to the tip; the ram CLAMP is drawn centred here
+   *  (the punch profile itself is drawn at its tip origin, as machineObstacles does). */
   tangCentreX: number;
 }
 
@@ -259,13 +266,17 @@ export type DieFamily = 'v' | 'multi-v' | 'hemming' | 'u' | 'custom';
 export interface Die extends ToolBase {
   kind: 'die';
   family: DieFamily;
-  vWidth: number;             // V opening at the shoulder plane, mm (active V)
-  vAngle: number;             // included V angle, deg (e.g. 88, 85, 30)
+  /** V opening at the shoulder plane, mm (active V). Convention: a flat die without a notch (hemming
+   *  die, custom flat die) has vWidth 0 and vAngle 180 — never feed V = 0 into airBendForce; hemming
+   *  stations are identified by family === 'hemming' and use hemFlattenForce. */
+  vWidth: number;
+  vAngle: number;             // included V angle, deg (e.g. 88, 85, 30; 180 = flat die; a U die = angle between its walls)
   shoulderRadius: number;     // mm
   /** Total width in X (mm). */
   bodyWidth: number;
 }
 
+/** Fingers inherit ToolBase.maxLoadPerMeter but it is meaningless for them (standard fingers carry 0). */
 export interface Finger extends ToolBase {
   kind: 'finger';
   /** Height of the vertical stop face (mm). */
@@ -303,7 +314,9 @@ export interface Machine {
   stroke: number;             // Y travel of the ram, mm
   /** Open height: TABLE TOP (die-holder seat) → ram clamp bottom face at top-dead-centre, mm.
    *  Tool stack = table.holderHeight + die.height + punch.height must be ≤ daylight, and
-   *  stroke ≥ (daylight − stack) + maxRamDepth + 5. validateMachine() checks this. */
+   *  stroke ≥ (daylight − stack) + maxRamDepth + 5. validateMachine() checks this with the nominal
+   *  120 + 60 stack and a nominal maxRamDepth of 15 mm; the per-station stack is checked by
+   *  validateSetup and the per-bend depth by strokeCheck (both called by the planner). */
   daylight: number;
   /** Distance from the bend line back to the side-frame throat (X), mm. */
   throatDepth: number;
@@ -422,7 +435,9 @@ export interface FingerSetting { x: number; r: number; z: number }
 
 export type GaugeContact = 'cut-edge' | 'flange-face' | 'radius' | 'none';
 
-/** How the operator turns the part between two steps (rigid motion between placements). */
+/** How the operator turns the part between two steps (rigid motion between placements).
+ *  'none' = translation or a yaw ≤ 45°; 'rotate180' = any larger rotation about the vertical axis
+ *  (a 90° yaw between orthogonal bend lines counts as 'rotate180' for the cost model). */
 export type Turn = 'none' | 'rotate180' | 'flip-front-back' | 'flip-end-for-end';
 
 export interface BendStep {
@@ -451,7 +466,10 @@ export interface BendStep {
   force: number;
   forcePerMeter: number;
   loadPercentOfTool: number;
-  /** Bend line length (mm), punch length used, part Z offset from the station start. */
+  /** Bend line length (mm), punch length used, part Z offset from the station start. The punch
+   *  piece of length punchLength (composed of `segments`) is CENTRED in the station
+   *  ((zStart + zEnd)/2 ± punchLength/2); partZOffset places the part's left-most point relative
+   *  to station.zStart. */
   bendLength: number;
   punchLength: number;
   segments: number[];
@@ -459,7 +477,9 @@ export interface BendStep {
   /** Backgauge settings per finger (empty ⇒ no gauging possible). */
   backgauge: FingerSetting[];
   gaugeContact: GaugeContact;
-  /** Gauged leg: outside dimension to the virtual sharp / tangent (what is checked with a caliper). */
+  /** Gauged leg: outside dimension to the virtual sharp / tangent (what is checked with a caliper)
+   *  — the check dimension after this step, from this bend's virtual sharp / tangent to the gauged
+   *  edge or face (gauge contact X − BA/2 + OSSB). */
   gaugedFlangeOutside: number;
   bendDeduction: number;
   dimensionRef: 'virtual-sharp' | 'tangent';
@@ -467,7 +487,9 @@ export interface BendStep {
   orientation: { faceUp: 'top' | 'bottom'; backFlangeId: string };
   /** Part manipulation relative to the previous step. */
   manipulation: { turn: Turn; stationChange: boolean };
-  /** True when 180 − overbendAngle ≤ die.vAngle + 1 (sheet bottoms on the V faces). */
+  /** True when 180 − overbendAngle ≤ die.vAngle + 1 (sheet bottoms on the V faces). An information
+   *  flag (every standard 90° bend on 88° tools bottoms slightly); feasibility uses the physical
+   *  fit tipAngle ≤ loaded && vAngle ≤ loaded (see ARCHITECTURE "Tool angle feasibility"). */
   bottoming: boolean;
   collisions: CollisionReport[];
   warnings: Message[];
@@ -483,6 +505,9 @@ export interface BendProgram {
   steps: BendStep[];
   /** Max force across steps (kN), vs machine capacity. */
   maxForce: number;
+  /** No 'error' collisions, forces ≤ capacity and tool ratings, every bend angle-feasible on its
+   *  station, every leg ≥ its minimum leg, hems have a hemming station. Setup validation errors
+   *  are copied to `warnings` but do not clear this flag. */
   feasible: boolean;
   warnings: Message[];
   /** Search statistics for the UI. */
@@ -554,6 +579,8 @@ export interface RecognizedSheet {
   bends3d: Array<{
     id: string;
     axisPoint: Vec3;
+    /** Unit axis with FoldedGeometry's sign convention: rotating faceA's normal by +angle about it
+     *  (right-hand rule) gives faceB's normal. */
     axisDir: Vec3;
     innerRadius: number;
     angle: number;              // deg from flat
@@ -587,7 +614,10 @@ export interface MatchResult {
 export interface ImportResult {
   flat?: FlatPattern;
   mesh?: TriangleMesh;
+  /** Filled by the caller (the UI runs recognizeSheet(mesh) / matchToDxf after importFile —
+   *  import-files does not depend on recognize-3d). */
   recognized?: RecognizedSheet;
+  /** Importer warnings (mesh importers return them here rather than on the TriangleMesh). */
   warnings: Message[];
 }
 

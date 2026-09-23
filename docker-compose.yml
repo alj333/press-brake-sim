@@ -1,0 +1,31 @@
+# Press Brake Simulator — Docker Compose (Synology Container Manager "Project" compatible).
+#   docker compose up -d --build        # first start (builds the image from this folder)
+#   docker compose logs -f pbsim        # server log
+#   docker compose down                 # stop (the shared library stays in ./data)
+services:
+  pbsim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: press-brake-sim:latest
+    container_name: pbsim
+    ports:
+      - "8080:8080"          # host:container — change the left side if 8080 is taken on the NAS
+    volumes:
+      - ./data:/data         # shared tool library (data/library.json); backed up with the folder
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+      - TZ=Asia/Bangkok
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

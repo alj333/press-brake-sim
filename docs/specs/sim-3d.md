@@ -174,8 +174,11 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   units), a drei `<Grid>` on the floor (`tableTopY − table.height − 120`), `<OrbitControls
   makeDefault>`, a `<CameraRig>` that applies the store's `cameraPreset` whenever the preset, the
   nonce, the framing target/radius or the program/part change: camera = target + dir·d with
-  `d = radius / tan(fov/2) × 1.25`, target `(10, 30, active station centre Z)`, `radius =
-  max(160, 0.7·finished-part diagonal + 60)`, directions `iso (−0.7, 0.65, −0.5)` (front-left-
+  `d = radius / tan(fov/2) × 1.25`, target `(10, 80, active station centre Z)`, `radius =
+  max(stack, 0.7·finished-part diagonal + 60)` where `stack = max(300, 1.3 × half the tool
+  stack height (table top → clamp bottom at TDC + clamp height))` — the integrator widened the
+  framing so a small part is seen together with its die, punch and clamp instead of from inside
+  the ram extrusion (400 mm without a part), directions `iso (−0.75, 0.6, −0.5)` (front-left-
   above), `front (−1, 0.45, 0)` (from the operator, +Z to the right), `side (−0.5, 0.3, 1)`
   (from +Z looking along the bend line, offset to the operator side so the camera stays in
   front of the clamp: operator LEFT, backgauge RIGHT like the section view), `top (−0.05, 1, 0)`

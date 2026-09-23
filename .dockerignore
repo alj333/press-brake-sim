@@ -1,0 +1,15 @@
+node_modules
+dist
+data
+scratch
+docs
+samples/__pycache__
+.git
+.gitignore
+*.log
+test-results
+playwright-report
+.DS_Store
+*.local
+README.md
+ARCHITECTURE.md

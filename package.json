@@ -1,7 +1,11 @@
 {
   "name": "press-brake-sim",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Press brake bending simulator: import STEP/DXF sheet-metal parts, plan the bend program (sequence, tooling, backgauge, tonnage, collisions) and simulate the folding in 3D.",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +15,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "serve": "tsx server/index.ts",
+    "start": "tsx server/index.ts",
     "preview": "vite preview",
     "lint": "oxlint"
   },
