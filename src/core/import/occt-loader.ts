@@ -6,12 +6,14 @@ import type { OcctModule } from 'occt-import-js';
 
 let cached: Promise<OcctModule> | null = null;
 
-const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+// Node (vitest / tsx) is detected positively so that a browser module Worker — which has neither
+// `window` nor `document` — takes the browser path.
+const isNode = typeof process !== 'undefined' && typeof process.versions === 'object' && typeof process.versions.node === 'string';
 
 export function loadOcct(): Promise<OcctModule> {
   if (cached) return cached;
   cached = (async () => {
-    if (isBrowser) {
+    if (!isNode) {
       const [{ default: occtimportjs }, { default: wasmUrl }] = await Promise.all([
         import('occt-import-js'),
         import('occt-import-js/dist/occt-import-js.wasm?url'),
