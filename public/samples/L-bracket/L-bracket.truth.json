@@ -1,0 +1,59 @@
+{
+  "name": "L-bracket",
+  "thickness": 2.0,
+  "kFactor": 0.44,
+  "flat": {
+    "name": "L-bracket",
+    "thickness": 2.0,
+    "width": 80,
+    "length": 96.5238934211693,
+    "outline": [
+      [
+        0,
+        0
+      ],
+      [
+        96.5238934211693,
+        0
+      ],
+      [
+        96.5238934211693,
+        80
+      ],
+      [
+        0,
+        80
+      ]
+    ],
+    "holes": [
+      {
+        "type": "circle",
+        "center": [
+          25,
+          40
+        ],
+        "radius": 5
+      }
+    ],
+    "bends": [
+      {
+        "id": "B1",
+        "u": 58.26194671058465,
+        "direction": "up",
+        "angle": 90,
+        "innerRadius": 2.0,
+        "kFactor": 0.44,
+        "bendAllowance": 4.523893421169302,
+        "p0": [
+          58.26194671058465,
+          0
+        ],
+        "p1": [
+          58.26194671058465,
+          80
+        ]
+      }
+    ]
+  },
+  "bendCount": 1
+}

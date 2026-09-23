@@ -1,0 +1,50 @@
+{
+  "name": "acute-bracket",
+  "thickness": 1.5,
+  "kFactor": 0.44,
+  "flat": {
+    "name": "acute-bracket",
+    "thickness": 1.5,
+    "width": 60,
+    "length": 99.08938009881547,
+    "outline": [
+      [
+        0,
+        0
+      ],
+      [
+        99.08938009881547,
+        0
+      ],
+      [
+        99.08938009881547,
+        60
+      ],
+      [
+        0,
+        60
+      ]
+    ],
+    "holes": [],
+    "bends": [
+      {
+        "id": "B1",
+        "u": 59.544690049407734,
+        "direction": "up",
+        "angle": 135,
+        "innerRadius": 1.5,
+        "kFactor": 0.44,
+        "bendAllowance": 5.089380098815465,
+        "p0": [
+          59.544690049407734,
+          0
+        ],
+        "p1": [
+          59.544690049407734,
+          60
+        ]
+      }
+    ]
+  },
+  "bendCount": 1
+}
