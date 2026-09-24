@@ -47,9 +47,9 @@ export interface SimViewportProps extends SimSceneProps {
  * clamp (−X) or above the ram: a camera inside those extrusions sees only their inner faces.
  */
 const PRESET_DIRS: Record<CameraPreset, Vec3> = {
-  iso: { x: -0.75, y: 0.6, z: -0.5 },
-  front: { x: -1, y: 0.45, z: 0 },
-  side: { x: -0.5, y: 0.3, z: 1 },
+  iso: { x: -0.9, y: 0.42, z: -0.5 },
+  front: { x: -1, y: 0.25, z: 0 },
+  side: { x: -0.35, y: 0.22, z: 1 },
   top: { x: -0.05, y: 1, z: 0 },
 };
 /** Camera distance = radius / tan(fov/2) × this. */
@@ -112,8 +112,12 @@ interface SceneContentProps extends SimSceneProps {
 function SceneContent({ part, program, machine, library, setup, frame, sceneKey }: SceneContentProps) {
   const invalidate = useThree(s => s.invalidate);
   useEffect(() => { invalidate(); }, [frame, invalidate]);
-  // plan view: the ram, clamps and punch would hide the bend line — draw them translucent
-  const xray = useSimStore(s => s.cameraPreset === 'top');
+  // The ram beam and clamp are far larger than any part and sit right above the bend: they are
+  // always drawn translucent so the part stays visible; the punch itself goes translucent only in
+  // the plan view, where it would hide the bend line.
+  const topView = useSimStore(s => s.cameraPreset === 'top');
+  const xray = true;
+  const toolXray = topView;
 
   const step = stepOf(program, frame);
   const station = stationOf(setup, step);
@@ -122,19 +126,19 @@ function SceneContent({ part, program, machine, library, setup, frame, sceneKey 
   const levels = machineLevels(machine, dieHeight, punchHeight);
   const floorY = levels.tableTopY - machine.table.height - 120;
 
-  // framing: the active station's centre just above the die plane; the radius covers the finished
-  // part AND the tool stack (table top → clamp bottom at TDC), so a small part is seen together with
-  // its die, punch and clamp instead of from inside the ram extrusion.
+  // framing: the active station's centre just above the die plane. With a part loaded the radius
+  // follows the finished part (plus the die body and punch tip that surround it) so the bend is
+  // the subject of the picture; the clamp and ram enter the frame only for larger parts. Without a
+  // part the tool stack (table top → clamp bottom at TDC) is framed instead.
   const stackHalf = 0.5 * (levels.tdcClampY + machine.ram.clampHeight - levels.tableTopY);
   const radius = useMemo(() => {
-    const stack = Math.max(300, stackHalf * 1.3);
-    if (!part) return Math.max(400, stack);
+    if (!part) return Math.max(400, stackHalf * 1.3);
     const b = foldGeometry(part, finishedState(part)).bounds;
     const diag = Math.hypot(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
-    return Math.max(stack, diag * 0.7 + 60);
+    return Math.max(140, diag * 0.55 + 40);
   }, [part, stackHalf]);
   const zc = stationCentreZ(station ?? setup.stations[0], machine);
-  const target = useMemo<Vec3>(() => ({ x: 10, y: 80, z: zc }), [zc]);
+  const target = useMemo<Vec3>(() => ({ x: 10, y: part ? 45 : 80, z: zc }), [zc, part]);
   const ramTopY = levels.tdcClampY + machine.ram.clampHeight + machine.ram.height;
 
   return (
@@ -168,7 +172,7 @@ function SceneContent({ part, program, machine, library, setup, frame, sceneKey 
           ramY={frame.ramY}
           step={step}
           collisionKinds={kinds}
-          xray={xray}
+          xray={toolXray}
         />
       ))}
       {part && (

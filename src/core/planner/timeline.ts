@@ -8,15 +8,23 @@ import type {
 } from '../types';
 import { mat4, vec3 } from '../geom';
 import { actualInnerRadius, punchTipY } from '../bend';
-import { foldGeometry, partSilhouette } from '../part';
+import { finishedState, foldGeometry, partSilhouette } from '../part';
 import { machineLevels } from '../machine';
 import type { PlannerLibrary } from './context';
 import { poseAtFraction } from './collision';
 
 /** Keyframes per phase (t = 0 … 1 inclusive). */
 export const KEYFRAMES_PER_PHASE = 25;
-/** Parked pose offset from the placement (mm): in front (−X) and above. */
+/** Maximum parked pose offset from the placement (mm): in front (−X) and above. The actual offset
+ *  is scaled to the part (see parkOffsetFor) so small parts stay in the camera frame. */
 export const PARK_OFFSET: Vec3 = { x: -300, y: 200, z: 0 };
+
+/** Parked offset for a part of the given finished diagonal (mm): 0.6 × diag in front, 0.4 × diag up,
+ *  clamped to [60, 300] × [40, 200]. */
+export function parkOffsetFor(diag: number): Vec3 {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return { x: -clamp(0.6 * diag, 60, -PARK_OFFSET.x), y: clamp(0.4 * diag, 40, PARK_OFFSET.y), z: 0 };
+}
 /** Part handling speed (mm/s) and turn time (s). */
 export const HANDLING_SPEED = 300;
 export const TURN_TIME_S = 1.5;
@@ -101,6 +109,13 @@ export function buildTimeline(program: BendProgram, part: PartModel, material: M
     timeS += dur;
   };
 
+  const finishedBounds = foldGeometry(part, finishedState(part)).bounds;
+  const parkOffset = parkOffsetFor(Math.hypot(
+    finishedBounds.max.x - finishedBounds.min.x,
+    finishedBounds.max.y - finishedBounds.min.y,
+    finishedBounds.max.z - finishedBounds.min.z,
+  ));
+
   program.steps.forEach((step: BendStep, stepIndex) => {
     const bend = part.flat.bends.find(b => b.id === step.bendId);
     if (!bend) return;
@@ -138,7 +153,7 @@ export function buildTimeline(program: BendProgram, part: PartModel, material: M
     const ramAt = (f: number): number => tipYAt(f) + punchHeight;
 
     const startState = doneState(done, step.bendId, fStart);
-    const parked = mat4.multiply(mat4.translation(PARK_OFFSET), placement);
+    const parked = mat4.multiply(mat4.translation(parkOffset), placement);
     const nearGauge = mat4.multiply(mat4.translationXYZ(-GAUGE_APPROACH, 0, 0), placement);
     const ramStart = prevRamY ?? levels.tdcClampY;
     const fingersPrev = prevFingers;

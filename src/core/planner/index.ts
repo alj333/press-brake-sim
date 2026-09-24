@@ -14,4 +14,4 @@ export { createEvaluator, HARD_ERROR_COST, GAUGE_WARNING_COST, FINGER_OVER_DIE_C
 export type { Evaluation, Evaluator, GaugedSide, LegInfo } from './evaluate';
 export { searchSequence, sequenceCost, manipulationCost, BEAM_WIDTH, EXHAUSTIVE_MAX_BENDS } from './search';
 export type { SearchResult, SequenceStep } from './search';
-export { buildTimeline, KEYFRAMES_PER_PHASE, PARK_OFFSET, HANDLING_SPEED, TURN_TIME_S, GAUGE_APPROACH, RELEASE_RISE } from './timeline';
+export { buildTimeline, KEYFRAMES_PER_PHASE, PARK_OFFSET, parkOffsetFor, HANDLING_SPEED, TURN_TIME_S, GAUGE_APPROACH, RELEASE_RISE } from './timeline';
