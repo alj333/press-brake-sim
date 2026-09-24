@@ -391,6 +391,8 @@
   "program.col.segments": "Punch length / segments",
   "program.col.includedAngle": "Included angle",
   "program.col.loadedAngle": "Loaded angle",
+  "program.col.springback": "Springback (°)",
+  "program.col.actualRadius": "Actual inner radius (mm)",
   "program.col.outside": "Outside dimension",
   "program.col.ref": "Reference",
   "program.col.deduction": "Bend deduction",

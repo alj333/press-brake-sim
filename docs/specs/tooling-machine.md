@@ -258,7 +258,10 @@ Ids (stable):
     compare by reference), `find(id)`, `upsert(item: Tool | Material | Machine)` (collection by
     shape: `collectionOf(item)`), `remove(id) → boolean`, `subscribe(fn) → unsubscribe` (called
     after every change with the new snapshot), `replace(lib)`, `resetStandardItems()` (regenerates
-    every `std:` item from code, keeps custom items).
+    every `std:` item from code, keeps custom items). Every change made through `upsert` / `remove` /
+    `resetStandardItems` / `importJson` is written through to the local cache (`saveLocal()`), so a
+    machine edit or a custom tool survives a reload without an explicit save; only the remote `PUT`
+    waits for `save()`.
   - `loadLocal()` → `'loaded' | 'empty' | 'invalid' | 'unavailable'` (cache → state, migrated,
     standard items filled in), `saveLocal() → boolean`.
   - `load(): Promise<LoadResult { local, remote: 'loaded' | 'not-found' | 'unavailable' | 'disabled', messages }>`

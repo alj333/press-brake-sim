@@ -90,7 +90,7 @@ export function PartPanel() {
               {MESH_UNIT_OPTIONS.map(u => <option key={u} value={u}>{t(`part.units.${u}`)}</option>)}
             </select>
           </label>
-          {importing && <span className="muted busy">{t('part.importing')}</span>}
+          {importing && <span className="muted busy" data-testid="part-importing">{t('part.importing')}</span>}
         </div>
       </section>
 
@@ -109,7 +109,7 @@ export function PartPanel() {
           <NumberField label={t('part.thickness')} value={thickness} onCommit={v => actions.setThickness(v)} min={0.1} max={50} step={0.1} digits={2} testId="thickness-input" />
         </div>
         {recognized && (
-          <p className="muted small">
+          <p className="muted small" data-testid="part-recognized">
             {t('part.recognized', { bends: recognized.bendCount, thickness: fmt(recognized.thickness, 2), confidence: Math.round(recognized.confidence * 100) })}
             {mesh && <> · {t('part.mesh', { triangles: mesh.indices.length / 3 })}</>}
             {matchInfo && <> · {t('part.matched', { pairs: matchInfo.pairs, count: matchInfo.count })}</>}
@@ -132,7 +132,7 @@ export function PartPanel() {
       <section className="panel-section">
         <div className="row row-between">
           <h3 className="section-title">{t('part.flatView')}</h3>
-          {summary && <span className="muted small">{t('part.summary', summary)}</span>}
+          {summary && <span className="muted small" data-testid="part-summary" data-flanges={summary.flanges} data-bends={summary.bends} data-holes={summary.holes}>{t('part.summary', summary)}</span>}
         </div>
         <FlatView
           flat={flat}

@@ -66,8 +66,10 @@ The app works without the API server too: the library is then kept in the browse
 
 Other scripts: `npm run typecheck` (`tsc -b`), `npm test` (vitest, ≈ 700 tests incl. the server), `npm run build`
 (type-check + production bundle in `dist/`), `npm run preview` (serve `dist/` on :4173, `/api` proxied to :8080),
-`npm run e2e` (Playwright boot test of the production build — needs `npx playwright install chromium` once, or
-`PW_CHROMIUM=/path/to/chromium`), `npm run lint`.
+`npm run e2e` (Playwright suite against the production build — run `npm run build` first; it uses
+`/opt/pw-browsers/chromium` when present, else `PW_CHROMIUM=/path/to/chromium`, else the browser from
+`npx playwright install chromium`; `e2e/*.spec.ts` cover boot + EN/TH, sample and DXF import, planning, playback,
+custom tools, machine edits, program export / print, with screenshots in `scratch/e2e/`), `npm run lint`.
 
 ### Production build without Docker
 

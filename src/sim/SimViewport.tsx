@@ -221,10 +221,10 @@ export function SimViewport({ part, program, machine, library, setup, t, classNa
         <SceneContent part={part} program={program} machine={machine} library={library} setup={effSetup} frame={frame} sceneKey={sceneKey} />
       </Canvas>
       {(caption || (!hasKeyframes && part)) && (
-        <div className="pbsim-caption">{caption || tt('sim.idle')}</div>
+        <div className="pbsim-caption" data-testid="sim-caption">{caption || tt('sim.idle')}</div>
       )}
       {hasCollision && (
-        <div className="pbsim-collisions" role="status">
+        <div className="pbsim-collisions" role="status" data-testid="sim-collisions">
           <div className="pbsim-collisions-title">{tt('sim.collisions')}{pausedAtCollision !== null ? ` — ${tt('sim.pausedOnCollision')}` : ''}</div>
           <ul>
             {frame.collisions.map((c, i) => (

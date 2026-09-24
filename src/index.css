@@ -321,15 +321,24 @@ label.btn input[hidden] { display: none; }
 .no-print-only { display: none; }
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
-  html, body, #root, .app { height: auto; overflow: visible; background: #fff; }
+  /* `:root` (not `html`) so the rule outranks the grey page background set on :root above */
+  :root, body, #root, .app { height: auto; overflow: visible; background: #fff; }
   .app-header, .col-left, .col-centre, .tabs, .no-print, .toasts, .shortcuts { display: none !important; }
   .app-body { display: block; padding: 0; }
   .col, .col-right { border: none; box-shadow: none; background: #fff; }
   .col-scroll { overflow: visible; }
   .panel { padding: 0; }
   .program-print { border: none; padding: 0; }
-  .table { font-size: 10px; }
-  .table th, .table td { padding: 2px 4px; }
+  /* the 16-column table must fit the page width: no horizontal scroll, wrapping headers, small type */
+  .table-wrap { overflow: visible; max-width: none; }
+  .table { font-size: 8.5px; width: 100%; table-layout: auto; }
+  .table th, .table td { padding: 2px 3px; }
+  .table th { white-space: normal; }
+  .program-header th { white-space: nowrap; }
+  .program-table .num-cell { white-space: normal; }
+  .program-print .small { font-size: 8px; }
+  .program-table .num-cell .small { white-space: nowrap; }
+  .notes-cell { min-width: 0; }
   .program-table { page-break-inside: auto; }
   .program-table tr { page-break-inside: avoid; }
 }

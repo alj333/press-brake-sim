@@ -249,7 +249,11 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   step + phase, `sim.pausedOnCollision`), and the step list (`sim.step`, kind, punch/die names,
   included angle, turn, error ✖ / warning ⚠ counts; the current step highlighted; click =
   `seekStep`; `hideSteps` when the ui shows its own sequence panel). Controls are disabled
-  without keyframes. Styles in `sim.css` (`pbsim-*` classes, light/dark).
+  without keyframes. Styles in `sim.css` (`pbsim-*` classes, light/dark). e2e hooks:
+  `data-testid` `sim-step-back` / `sim-play` (`data-playing`) / `sim-step-forward` / `sim-scrubber` /
+  `sim-time` (`data-time-s`, `data-duration-s`) / `sim-speed` / `sim-continue` / `sim-section` /
+  `sim-camera-<preset>` / `sim-status` (`data-step-index`, `data-phase`); the viewport caption is
+  `sim-caption`, the collision badge `sim-collisions`, the section canvas `section-view`.
 
 ## 5. Rendering conventions
 

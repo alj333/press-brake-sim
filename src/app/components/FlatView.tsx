@@ -81,9 +81,21 @@ export function FlatView({ flat, part, selectedBendId, onSelectBend, addMode, on
     if (!ctx) return;
     if (!flat || !fit) {
       ctx.fillStyle = '#6b7381';
-      ctx.font = '13px system-ui, sans-serif';
+      ctx.font = '13px Sarabun, "Noto Sans Thai", system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(t('part.noPart'), size.width / 2, height / 2);
+      // word-wrap the empty-state text to the canvas width (the Thai text is long)
+      const words = t('part.noPart').split(/\s+/);
+      const maxW = Math.max(40, size.width - 24);
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        const next = line ? `${line} ${w}` : w;
+        if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = w; } else line = next;
+      }
+      if (line) lines.push(line);
+      const lineH = 18;
+      const y0 = height / 2 - ((lines.length - 1) * lineH) / 2;
+      lines.forEach((l, i) => ctx.fillText(l, size.width / 2, y0 + i * lineH));
       return;
     }
     // sheet with holes (even-odd)

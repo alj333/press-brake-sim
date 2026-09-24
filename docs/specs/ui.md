@@ -195,6 +195,8 @@ referentially stable per store state (memoised `Pick`).
   snapping to outline vertices within 3 px) and the bends table (`data-testid="bend-row-<id>"`):
   id, direction toggle, angle, inner radius, k, correction, length, `<SourceBadge>` per attribute
   (dxf / step / mesh / user / default), delete. `Add bend` toggles the two-click mode.
+  e2e hooks: `data-testid="part-importing"` (busy text), `part-recognized` (the recognition line),
+  `part-summary` with `data-flanges` / `data-bends` / `data-holes`.
 - **Tools**: station list (`data-testid="station-<id>"`): Z start / end, segments editor (text
   `835, 835, …` parsed to numbers; "auto" fills from the punch's segment lengths), punch and die
   `<select>` grouped by family (`<optgroup>`), flip toggles, remove; `Add station` (largest free
@@ -224,7 +226,10 @@ referentially stable per store state (memoised `Pick`).
   text, gauge contact, bottoming flag, warnings and collisions via `tm` — clicking a warning /
   collision seeks the sim to that step (collision: to the keyframe at its `atFraction`); clicking
   the card selects the step and seeks its start. Dragging a card onto another reorders →
-  `setFixedOrder(newOrder)` → `plan()`; `Auto` clears the order and re-plans.
+  `setFixedOrder(newOrder)` → `plan()`; `Auto` clears the order and re-plans. e2e hooks on the
+  card: `data-bend-id`, `data-turn`, `data-errors`; inside it `step-station-<i>`, `step-angle-<i>`,
+  `step-turn-<i>`, `step-backgauge-<i>` (`data-contact`), `step-finger-<i>-<j>` (`data-x/r/z`),
+  `step-ramdepth-<i>` (`data-ram-depth`), `step-force-<i>` (`data-force-kn`).
 - **Program**: printable table (`data-testid="program-table"`) with **both languages side by
   side** in every header cell (`EN / TH`), a header block (part, machine, material, thickness,
   date, feasible), per-step rows: step, bend, tools + segments, included angle, loaded angle,
@@ -232,7 +237,11 @@ referentially stable per store state (memoised `Pick`).
   finger, part Z offset, ram depth, force (kN and t), % of tool, turn, orientation; footer: max
   force (t) and capacity; buttons `Print` (`window.print()`, `@media print` hides everything but
   the panel), `Export JSON` (`data-testid="export-json"`), `Export CSV` (`data-testid="export-csv"`,
-  bilingual header row, `;`-free, UTF-8 BOM so Excel opens Thai correctly).
+  bilingual header row, `;`-free, UTF-8 BOM so Excel opens Thai correctly; the springback and
+  actual-radius columns use the plain labels `program.col.springback` / `program.col.actualRadius`,
+  never the parametrised sequence messages). Header block hooks: `program-header`, `program-part`,
+  `program-machine` (`data-bed-length`). The print stylesheet lets the 16-column table fit an A4
+  landscape page (no horizontal scroll, wrapping headers, 8.5 px type, white page background).
 
 ## 5. Formatting
 

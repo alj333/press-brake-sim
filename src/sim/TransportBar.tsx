@@ -46,11 +46,11 @@ export function TransportBar({ t, program, className, style, hideSteps = false }
   return (
     <div className={className ? `pbsim-transport ${className}` : 'pbsim-transport'} style={style}>
       <div className="pbsim-transport-row">
-        <button type="button" className="pbsim-btn" onClick={() => actions.stepPhase(-1)} disabled={!hasTimeline} title={tt('sim.stepBack')} aria-label={tt('sim.stepBack')}>◀</button>
-        <button type="button" className="pbsim-btn pbsim-btn-primary" onClick={() => actions.toggle()} disabled={!hasTimeline} aria-label={playing ? tt('sim.pause') : tt('sim.play')}>
+        <button type="button" className="pbsim-btn" onClick={() => actions.stepPhase(-1)} disabled={!hasTimeline} title={tt('sim.stepBack')} aria-label={tt('sim.stepBack')} data-testid="sim-step-back">◀</button>
+        <button type="button" className="pbsim-btn pbsim-btn-primary" onClick={() => actions.toggle()} disabled={!hasTimeline} aria-label={playing ? tt('sim.pause') : tt('sim.play')} data-testid="sim-play" data-playing={playing ? 'true' : 'false'}>
           {playing ? '❚❚ ' + tt('sim.pause') : '▶ ' + tt('sim.play')}
         </button>
-        <button type="button" className="pbsim-btn" onClick={() => actions.stepPhase(1)} disabled={!hasTimeline} title={tt('sim.stepForward')} aria-label={tt('sim.stepForward')}>▶</button>
+        <button type="button" className="pbsim-btn" onClick={() => actions.stepPhase(1)} disabled={!hasTimeline} title={tt('sim.stepForward')} aria-label={tt('sim.stepForward')} data-testid="sim-step-forward">▶</button>
         <input
           type="range"
           className="pbsim-scrubber"
@@ -61,32 +61,33 @@ export function TransportBar({ t, program, className, style, hideSteps = false }
           disabled={!hasTimeline}
           onChange={e => actions.seekTime(Number(e.target.value))}
           aria-label={tt('sim.time')}
+          data-testid="sim-scrubber"
         />
-        <span className="pbsim-time">{formatTime(timeS)} / {formatTime(duration)}</span>
+        <span className="pbsim-time" data-testid="sim-time" data-time-s={timeS.toFixed(3)} data-duration-s={duration.toFixed(3)}>{formatTime(timeS)} / {formatTime(duration)}</span>
         <label className="pbsim-field">
           <span>{tt('sim.speed')}</span>
-          <select value={speed} onChange={e => actions.setSpeed(Number(e.target.value))}>
+          <select value={speed} onChange={e => actions.setSpeed(Number(e.target.value))} data-testid="sim-speed">
             {(SIM_SPEEDS as readonly number[]).includes(speed) ? null : <option value={speed}>{speed}×</option>}
             {SIM_SPEEDS.map(v => <option key={v} value={v}>{v}×</option>)}
           </select>
         </label>
         <label className="pbsim-field">
-          <input type="checkbox" checked={continueOnCollision} onChange={e => actions.setContinueOnCollision(e.target.checked)} />
+          <input type="checkbox" checked={continueOnCollision} onChange={e => actions.setContinueOnCollision(e.target.checked)} data-testid="sim-continue" />
           <span>{tt('sim.continueOnCollision')}</span>
         </label>
-        <button type="button" className={showSection ? 'pbsim-btn pbsim-btn-on' : 'pbsim-btn'} onClick={() => actions.setShowSection(!showSection)} aria-pressed={showSection}>
+        <button type="button" className={showSection ? 'pbsim-btn pbsim-btn-on' : 'pbsim-btn'} onClick={() => actions.setShowSection(!showSection)} aria-pressed={showSection} data-testid="sim-section">
           {tt('sim.section')}
         </button>
         <span className="pbsim-field">
           <span>{tt('sim.camera')}</span>
           {PRESETS.map(p => (
-            <button key={p} type="button" className={cameraPreset === p ? 'pbsim-btn pbsim-btn-on' : 'pbsim-btn'} onClick={() => actions.setCameraPreset(p)} aria-pressed={cameraPreset === p}>
+            <button key={p} type="button" className={cameraPreset === p ? 'pbsim-btn pbsim-btn-on' : 'pbsim-btn'} onClick={() => actions.setCameraPreset(p)} aria-pressed={cameraPreset === p} data-testid={`sim-camera-${p}`}>
               {tt(`sim.camera.${p}`)}
             </button>
           ))}
         </span>
       </div>
-      <div className="pbsim-transport-status">
+      <div className="pbsim-transport-status" data-testid="sim-status" data-step-index={stepIndex} data-phase={phase ?? ''}>
         {!program && <span className="pbsim-muted">{tt('sim.noProgram')}</span>}
         {program && hasTimeline && stepIndex >= 0 && program.steps[stepIndex] && (
           <span>

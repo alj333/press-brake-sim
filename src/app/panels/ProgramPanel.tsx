@@ -102,10 +102,10 @@ export function ProgramPanel() {
       </div>
       <div className="program-print">
         <h2 className="program-title"><Both k="program.title" /></h2>
-        <table className="table program-header">
+        <table className="table program-header" data-testid="program-header">
           <tbody>
-            <tr><th><Both k="program.header.part" /></th><td>{project.name || program.partName}{project.name && project.name !== program.partName ? ` (${program.partName})` : ''}</td>
-              <th><Both k="program.header.machine" /></th><td>{machine.name} · {fmt(machine.capacity, 0)} kN · {fmt(machine.bedLength, 0)} mm</td></tr>
+            <tr><th><Both k="program.header.part" /></th><td data-testid="program-part">{project.name || program.partName}{project.name && project.name !== program.partName ? ` (${program.partName})` : ''}</td>
+              <th><Both k="program.header.machine" /></th><td data-testid="program-machine" data-bed-length={fmt(machine.bedLength, 1)}>{machine.name} · {fmt(machine.capacity, 0)} kN · {fmt(machine.bedLength, 0)} mm</td></tr>
             <tr><th><Both k="program.header.material" /></th><td>{material?.name ?? program.materialId}</td>
               <th><Both k="program.header.thickness" /></th><td>{fmt(program.thickness, 2)} mm</td></tr>
             <tr><th><Both k="program.header.date" /></th><td>{fmtDate(new Date(), lang)}</td>

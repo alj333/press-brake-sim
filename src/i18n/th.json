@@ -391,6 +391,8 @@
   "program.col.segments": "ความยาวพันช์ / ชิ้นย่อย",
   "program.col.includedAngle": "มุมภายใน",
   "program.col.loadedAngle": "มุมขณะรับแรง",
+  "program.col.springback": "สปริงแบ็ก (°)",
+  "program.col.actualRadius": "รัศมีด้านในที่เกิดจริง (มม.)",
   "program.col.outside": "ขนาดด้านนอก",
   "program.col.ref": "อ้างอิง",
   "program.col.deduction": "ค่าหักลบการพับ",

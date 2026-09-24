@@ -27,6 +27,10 @@ function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver,
     <div
       className={cls}
       data-testid={`step-${step.index}`}
+      data-bend-id={step.bendId}
+      data-turn={step.manipulation.turn}
+      data-errors={errors}
+      data-feasible-collisions={errors === 0 ? 'true' : 'false'}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -39,15 +43,15 @@ function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver,
         <strong>{t('sequence.step', { index: step.index + 1 })} · {step.bendId}</strong>
         <span className="badge">{t(`sequence.kind.${step.kind}`)}</span>
         <span className="row-grow" />
-        <span className="turn" title={t(`turn.${step.manipulation.turn}`)}>
+        <span className="turn" title={t(`turn.${step.manipulation.turn}`)} data-testid={`step-turn-${step.index}`}>
           <span className="turn-icon" aria-hidden="true">{TURN_ICON[step.manipulation.turn]}</span> {t(`turn.${step.manipulation.turn}`)}
           {step.manipulation.stationChange && <> · {t('sequence.stationChange')}</>}
         </span>
       </div>
       <div className="step-grid small">
-        <span className="k">{t('sequence.station')}</span><span>{step.stationId} · {step.punchName} / {step.dieName}</span>
+        <span className="k">{t('sequence.station')}</span><span data-testid={`step-station-${step.index}`}>{step.stationId} · {step.punchName} / {step.dieName}</span>
         <span className="k">{t('sequence.angle')}</span>
-        <span>
+        <span data-testid={`step-angle-${step.index}`}>
           <strong>{fmt(step.includedAngle, 1)}°</strong> → {fmt(step.loadedIncludedAngle, 2)}° {t('sequence.loadedAngle')}
           <span className="muted"> · {t('sequence.springback', { springback: fmt(step.springback, 2), overbend: fmt(step.overbendAngle, 2) })}</span>
           {step.bottoming && <span className="badge badge-warn"> {t('sequence.bottoming')}</span>}
@@ -55,17 +59,17 @@ function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver,
         <span className="k">{t('sequence.outside')}</span>
         <span><strong>{fmt(step.gaugedFlangeOutside, 2)}</strong> mm ({t(`ref.${step.dimensionRef}`)}) · BD {fmt(step.bendDeduction, 2)} mm · <span className="muted">{t('sequence.actualRadius', { radius: fmt(step.actualInnerRadius, 2) })}</span></span>
         <span className="k">{t('sequence.backgauge')}</span>
-        <span>
+        <span data-testid={`step-backgauge-${step.index}`} data-contact={step.gaugeContact}>
           {step.backgauge.length === 0 && <span className="muted">{t('sequence.noBackgauge')}</span>}
           {step.backgauge.map((f, i) => (
-            <span key={i} className="finger-chip">{t('sequence.finger', { index: i + 1 })}: {t('sequence.fingerValues', { x: fmt(f.x, 2), r: fmt(f.r, 1), z: fmt(f.z, 1) })}</span>
+            <span key={i} className="finger-chip" data-testid={`step-finger-${step.index}-${i}`} data-x={fmt(f.x, 3)} data-r={fmt(f.r, 3)} data-z={fmt(f.z, 3)}>{t('sequence.finger', { index: i + 1 })}: {t('sequence.fingerValues', { x: fmt(f.x, 2), r: fmt(f.r, 1), z: fmt(f.z, 1) })}</span>
           ))}
           <span className="muted"> · {t('sequence.gaugeContact')}: {t(`contact.${step.gaugeContact}`)}</span>
         </span>
         <span className="k">{t('sequence.ramDepth')}</span>
-        <span><strong>{fmt(step.ramDepth, 2)}</strong> mm · {t('sequence.punchLength')} {fmt(step.punchLength, 0)} mm ({step.segments.join('+') || '–'}) · {t('sequence.partZOffset')} {fmt(step.partZOffset, 1)} mm</span>
+        <span data-testid={`step-ramdepth-${step.index}`} data-ram-depth={fmt(step.ramDepth, 3)}><strong>{fmt(step.ramDepth, 2)}</strong> mm · {t('sequence.punchLength')} {fmt(step.punchLength, 0)} mm ({step.segments.join('+') || '–'}) · {t('sequence.partZOffset')} {fmt(step.partZOffset, 1)} mm</span>
         <span className="k">{t('sequence.force')}</span>
-        <span>
+        <span data-testid={`step-force-${step.index}`} data-force-kn={fmt(step.force, 3)}>
           <strong>{fmt(step.force, 1)} kN</strong> ({fmt(kNToTonnes(step.force), 2)} t) · {fmt(step.forcePerMeter, 0)} kN/m ·{' '}
           <span className={step.loadPercentOfTool > 100 ? 'text-error' : step.loadPercentOfTool > 90 ? 'text-warn' : ''}>{fmt(step.loadPercentOfTool, 0)} % {t('sequence.ofTool')}</span>
           {' · '}{t('sequence.orientation')}: {t(`faceUp.${step.orientation.faceUp}`)} / {step.orientation.backFlangeId}

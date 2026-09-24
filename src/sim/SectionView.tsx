@@ -246,6 +246,7 @@ export function SectionView({ part, program, machine, library, setup, frame, sec
   return (
     <canvas
       ref={canvasRef}
+      data-testid="section-view"
       className={className ? `pbsim-section ${className}` : 'pbsim-section'}
       style={{ width: '100%', height: '100%', display: 'block', ...style }}
     />

@@ -107,8 +107,11 @@ export class LibraryStore {
     for (const fn of [...this.listeners]) fn(lib);
   }
 
+  /** Apply a change, notify, and write the local cache through (the remote PUT stays explicit via
+   *  `save()`): a machine edit or a custom tool must survive a reload even when nobody presses "Save". */
   private touch(patch: Partial<ToolLibrary>): void {
     this.replace({ ...this.lib, ...patch, version: LIBRARY_VERSION, updatedAt: new Date().toISOString() });
+    this.saveLocal();
   }
 
   /** Insert or replace an item (by id) in its collection. */

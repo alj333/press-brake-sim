@@ -14,7 +14,7 @@ export const SAMPLES_DIR = resolve(ROOT, 'samples');
 
 /** Sample bend ids (B1…Bn) as the DXF flats name them. */
 export const SAMPLE_BENDS: Record<string, number> = {
-  'L-bracket': 1, 'U-channel': 2, 'Z-bracket': 2, 'hat-channel': 4, 'acute-bracket': 1, 'box-4-flange': 4, 'tabbed-plate': 2,
+  'L-bracket': 1, 'U-channel': 2, 'Z-bracket': 2, 'hat-channel': 4, 'acute-bracket': 1, 'box-4-flange': 4, 'tabbed-plate': 1,
 };
 
 export interface ErrorLog {
@@ -87,7 +87,7 @@ export async function plan(page: Page, steps: number): Promise<void> {
   await button.click();
   await expect(page.getByTestId('plan-progress')).toBeHidden({ timeout: 120_000 });
   await expect(page.getByTestId('program-feasible')).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByTestId('steps').locator('[data-testid^="step-"]:not([data-testid^="step-collisions"]):not([data-testid^="step-warnings"])')).toHaveCount(steps);
+  await expect(page.getByTestId('steps').locator('[role="listitem"]')).toHaveCount(steps);
   await expect(page.getByTestId(`step-${steps - 1}`)).toBeVisible();
 }
 
