@@ -13,7 +13,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         HOST: '0.0.0.0',
-        PORT: '8090',
+        PORT: '8091',
         DATA_DIR: path.resolve(projectRoot, '../../data/press-brake-sim'),
         DIST_DIR: path.resolve(projectRoot, 'dist'),
         TZ: 'Asia/Bangkok',
