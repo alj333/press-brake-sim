@@ -79,6 +79,22 @@ npm run build
 PORT=8080 DATA_DIR=/srv/pbsim/data npm run serve
 ```
 
+### Axiom LAN server
+
+The Axiom server runs the production build under PM2 on LAN port `8090`:
+
+```bash
+npm ci --no-audit --no-fund
+npm run build
+mkdir -p /home/axiom/clawd/data/press-brake-sim
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+Shop-floor PCs can open `http://192.168.148.145:8090/`. The shared tool library is stored outside the
+Git checkout at `/home/axiom/clawd/data/press-brake-sim/library.json`, so application updates do not replace
+site tooling or machine calibration data.
+
 `server/index.ts` (Express 5, run with `tsx`; on Node ≥ 22.18 plain `node server/index.ts` works too) serves
 `dist/` with an SPA fallback and the API:
 
