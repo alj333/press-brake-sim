@@ -11,6 +11,7 @@ import { useProjectStore, selectMachine } from '../store';
 import { MessageList } from '../components/MessageList';
 import { NumberField } from '../components/NumberField';
 import { fmt, kNToTonnes } from '../format';
+import { FeasibilityAssistant } from './FeasibilityAssistant';
 
 const TURN_ICON: Record<Turn, string> = { none: '→', rotate180: '↻', 'flip-front-back': '⇅', 'flip-end-for-end': '⇄' };
 
@@ -176,6 +177,8 @@ export function SequencePanel() {
           )}
         </section>
       )}
+
+      {program && !program.feasible && !programStale && <FeasibilityAssistant program={program} />}
 
       <section className="panel-section">
         {!program && project.part && <p className="muted">{t('sequence.noProgram')}</p>}
