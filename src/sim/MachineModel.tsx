@@ -9,9 +9,10 @@ import { Edges } from '@react-three/drei';
 import type { FingerSetting, Machine, ObstacleKind, ToolSetup } from '../core/types';
 import { machineObstacles, machineLevels } from '../core/machine';
 import { flatFinger } from '../core/tools';
-import { SIM_COLORS, toolStack, FRAME_PLATE, FRAME_COLUMN } from './scene';
+import { SIM_COLORS, toolStack } from './scene';
 import type { SimLibrary } from './scene';
 import { polygonRect, profileGeometry } from './threeUtils';
+import { MachineAppearance } from './MachineAppearance';
 
 export interface MachineModelProps {
   machine: Machine;
@@ -37,8 +38,15 @@ interface BoxProps {
 
 function Box({ name, x0, x1, y0, y1, z0, z1, material }: BoxProps) {
   const w = Math.max(1e-3, x1 - x0), h = Math.max(1e-3, y1 - y0), d = Math.max(1e-3, z1 - z0);
+  const transparent = material.transparent && material.opacity < 1;
   return (
-    <mesh name={name} position={[(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]} material={material}>
+    <mesh
+      name={name}
+      position={[(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2]}
+      material={material}
+      castShadow={!transparent}
+      receiveShadow
+    >
       <boxGeometry args={[w, h, d]} />
       <Edges color={EDGE_COLOR} threshold={30} transparent opacity={0.35} />
     </mesh>
@@ -47,13 +55,18 @@ function Box({ name, x0, x1, y0, y1, z0, z1, material }: BoxProps) {
 
 function useMaterials() {
   const mats = useMemo(() => {
-    const mk = (color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
-      new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.7, ...extra });
+    const mk = (color: string, metalness: number, roughness: number, extra: Partial<THREE.MeshPhysicalMaterialParameters> = {}) =>
+      new THREE.MeshPhysicalMaterial({ color, metalness, roughness, ...extra });
     return {
-      table: mk(SIM_COLORS.table), holder: mk(SIM_COLORS.holder), ram: mk(SIM_COLORS.ram), clamp: mk(SIM_COLORS.clamp),
-      ramXray: mk(SIM_COLORS.ram, XRAY), clampXray: mk(SIM_COLORS.clamp, XRAY),
-      frame: mk(SIM_COLORS.frame), beam: mk(SIM_COLORS.beam), finger: mk(SIM_COLORS.finger, { metalness: 0.4, roughness: 0.5 }),
-      collision: mk(SIM_COLORS.collision, { emissive: SIM_COLORS.collision, emissiveIntensity: 0.4 }),
+      table: mk('#314154', 0.24, 0.5, { clearcoat: 0.16, clearcoatRoughness: 0.62 }),
+      holder: mk('#aeb9c3', 0.74, 0.3),
+      ram: mk('#314d6b', 0.2, 0.44, { clearcoat: 0.26, clearcoatRoughness: 0.55 }),
+      clamp: mk('#778797', 0.68, 0.3),
+      ramXray: mk('#314d6b', 0.2, 0.44, { ...XRAY, clearcoat: 0.2, clearcoatRoughness: 0.55 }),
+      clampXray: mk('#778797', 0.62, 0.32, XRAY),
+      beam: mk('#314258', 0.52, 0.36),
+      finger: mk('#2d72b8', 0.58, 0.3),
+      collision: mk('#667480', 0.25, 0.42, { emissive: SIM_COLORS.collision, emissiveIntensity: 0.38 }),
     };
   }, []);
   useEffect(() => () => { for (const m of Object.values(mats)) m.dispose(); }, [mats]);
@@ -64,27 +77,13 @@ export function MachineModel({ machine, setup, library, ramY, fingers, collision
   const mats = useMaterials();
   const obstacles = useMemo(() => machineObstacles(machine, setup, library, ramY, fingers), [machine, setup, library, ramY, fingers]);
   const { dieHeight, punchHeight } = toolStack(setup, library);
-  const levels = machineLevels(machine, dieHeight, punchHeight);
+  const levels = useMemo(() => machineLevels(machine, dieHeight, punchHeight), [machine, dieHeight, punchHeight]);
   const bed = machine.bedLength;
   const finger = useMemo(() => library.fingers.find(f => f.id === machine.backgauge.fingerId) ?? flatFinger(), [library, machine.backgauge.fingerId]);
   const fingerGeometry = useMemo(() => profileGeometry(finger.profile.points, finger.width), [finger]);
   useEffect(() => () => fingerGeometry.dispose(), [fingerGeometry]);
 
   const pick = (kind: ObstacleKind, normal: THREE.Material): THREE.Material => (collisionKinds.has(kind) ? mats.collision : normal);
-
-  // side frames: C-frames of FRAME_PLATE thickness at the frame positions
-  const frameLeft = (bed - machine.distanceBetweenFrames) / 2;
-  const frameRight = bed - frameLeft;
-  const floorY = levels.tableTopY - machine.table.height - 120;
-  const ramTopTdc = levels.tdcClampY + machine.ram.clampHeight + machine.ram.height;
-  const frameMat = pick('frame', mats.frame);
-  const frameParts = (z0: number, z1: number, side: string) => (
-    <group name={`frame:${side}`} key={side}>
-      <Box name={`frame:${side}:column`} x0={machine.throatDepth} x1={machine.throatDepth + FRAME_COLUMN} y0={floorY} y1={ramTopTdc + 120} z0={z0} z1={z1} material={frameMat} />
-      <Box name={`frame:${side}:bottom`} x0={-machine.table.width / 2 - 60} x1={machine.throatDepth + FRAME_COLUMN} y0={floorY} y1={levels.tableTopY - machine.table.height + 80} z0={z0} z1={z1} material={frameMat} />
-      <Box name={`frame:${side}:top`} x0={-machine.ram.thickness / 2 - 60} x1={machine.throatDepth + FRAME_COLUMN} y0={ramTopTdc} y1={ramTopTdc + 120} z0={z0} z1={z1} material={frameMat} />
-    </group>
-  );
 
   return (
     <group name="machine">
@@ -95,7 +94,15 @@ export function MachineModel({ machine, setup, library, ramY, fingers, collision
           const f = fingers[i];
           if (!f) return null;
           return (
-            <mesh key={o.id} name={o.id} geometry={fingerGeometry} material={pick('finger', mats.finger)} position={[f.x, f.r, f.z - finger.width / 2]}>
+            <mesh
+              key={o.id}
+              name={o.id}
+              geometry={fingerGeometry}
+              material={pick('finger', mats.finger)}
+              position={[f.x, f.r, f.z - finger.width / 2]}
+              castShadow
+              receiveShadow
+            >
               <Edges color={EDGE_COLOR} threshold={30} transparent opacity={0.5} />
             </mesh>
           );
@@ -115,8 +122,14 @@ export function MachineModel({ machine, setup, library, ramY, fingers, collision
           pick('backgauge-beam', mats.beam);
         return <Box key={o.id} name={o.id} x0={r.x0} x1={r.x1} y0={r.y0} y1={r.y1} z0={z0} z1={z1} material={material} />;
       })}
-      {frameParts(frameLeft - FRAME_PLATE, frameLeft, 'left')}
-      {frameParts(frameRight, frameRight + FRAME_PLATE, 'right')}
+      <MachineAppearance
+        machine={machine}
+        levels={levels}
+        ramY={ramY}
+        collisionKinds={collisionKinds}
+        collisionMaterial={mats.collision}
+        xray={xray}
+      />
     </group>
   );
 }

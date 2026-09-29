@@ -25,28 +25,47 @@ export interface ToolModelProps {
   xray?: boolean | undefined;
 }
 
-const EDGE_COLOR = '#1c2230';
-
-function useToolMaterial(colour: string, xray = false): THREE.MeshStandardMaterial {
-  const m = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: colour, metalness: 0.5, roughness: 0.45, ...(xray ? { transparent: true, opacity: 0.28, depthWrite: false } : {}) }),
-    [colour, xray],
-  );
-  useEffect(() => () => m.dispose(), [m]);
-  return m;
-}
-
-function useCollisionMaterial(): THREE.MeshStandardMaterial {
-  const m = useMemo(() => new THREE.MeshStandardMaterial({ color: SIM_COLORS.collision, emissive: SIM_COLORS.collision, emissiveIntensity: 0.4, metalness: 0.3, roughness: 0.5 }), []);
-  useEffect(() => () => m.dispose(), [m]);
-  return m;
+function useToolMaterials() {
+  const materials = useMemo(() => {
+    const steel = (color: string, roughness: number, extra: Partial<THREE.MeshPhysicalMaterialParameters> = {}) =>
+      new THREE.MeshPhysicalMaterial({
+        color,
+        metalness: 0.78,
+        roughness,
+        clearcoat: 0.12,
+        clearcoatRoughness: 0.42,
+        ...extra,
+      });
+    const xray = (active: boolean) => new THREE.MeshStandardMaterial({
+      color: SIM_COLORS.punch,
+      metalness: 0.58,
+      roughness: 0.36,
+      transparent: true,
+      opacity: active ? 0.36 : 0.25,
+      depthWrite: false,
+      ...(active ? { emissive: SIM_COLORS.gauged, emissiveIntensity: 0.08 } : {}),
+    });
+    return {
+      punch: steel(SIM_COLORS.punch, 0.3),
+      punchActive: steel(SIM_COLORS.punch, 0.27, { emissive: SIM_COLORS.gauged, emissiveIntensity: 0.08 }),
+      die: steel(SIM_COLORS.die, 0.34),
+      dieActive: steel(SIM_COLORS.die, 0.3, { emissive: SIM_COLORS.gauged, emissiveIntensity: 0.07 }),
+      punchXray: xray(false),
+      punchXrayActive: xray(true),
+      collision: steel('#6f7c87', 0.42, {
+        metalness: 0.24,
+        emissive: SIM_COLORS.collision,
+        emissiveIntensity: 0.22,
+      }),
+    };
+  }, []);
+  useEffect(() => () => { for (const material of Object.values(materials)) material.dispose(); }, [materials]);
+  return materials;
 }
 
 export function ToolModel({ station, punch, die, ramY, step, collisionKinds, xray = false }: ToolModelProps) {
   const zStart = Math.min(station.zStart, station.zEnd), zEnd = Math.max(station.zStart, station.zEnd);
-  const toolMaterial = useToolMaterial(SIM_COLORS.punch);
-  const punchXrayMaterial = useToolMaterial(SIM_COLORS.punch, true);
-  const collisionMaterial = useCollisionMaterial();
+  const materials = useToolMaterials();
 
   const dieGeometry = useMemo(() => {
     if (!die) return null;
@@ -68,14 +87,23 @@ export function ToolModel({ station, punch, die, ramY, step, collisionKinds, xra
   }, [punch, station.punchFlipped, lengthKey]);
   useEffect(() => () => { for (const g of punchGeometries.values()) g.dispose(); }, [punchGeometries]);
 
-  const punchMaterial = collisionKinds.has('punch') ? collisionMaterial : xray ? punchXrayMaterial : toolMaterial;
-  const dieMaterial = collisionKinds.has('die') ? collisionMaterial : toolMaterial;
+  const activeStation = step?.stationId === station.id;
+  const punchCollision = collisionKinds.has('punch');
+  const dieCollision = collisionKinds.has('die');
+  const punchMaterial = punchCollision
+    ? materials.collision
+    : xray
+      ? activeStation ? materials.punchXrayActive : materials.punchXray
+      : activeStation ? materials.punchActive : materials.punch;
+  const dieMaterial = dieCollision ? materials.collision : activeStation ? materials.dieActive : materials.die;
+  const punchEdge = punchCollision ? SIM_COLORS.collisionEdge : SIM_COLORS.toolEdge;
+  const dieEdge = dieCollision ? SIM_COLORS.collisionEdge : SIM_COLORS.toolEdge;
 
   return (
     <group name={`station:${station.id}`}>
       {die && dieGeometry && (
-        <mesh name={`die:${station.id}`} geometry={dieGeometry} material={dieMaterial} position={[0, 0, zStart]}>
-          <Edges color={EDGE_COLOR} threshold={25} />
+        <mesh name={`die:${station.id}`} geometry={dieGeometry} material={dieMaterial} position={[0, 0, zStart]} castShadow receiveShadow>
+          <Edges color={dieEdge} threshold={30} transparent opacity={dieCollision ? 0.82 : 0.48} />
         </mesh>
       )}
       {punch && (
@@ -85,8 +113,15 @@ export function ToolModel({ station, punch, die, ramY, step, collisionKinds, xra
             const g = punchGeometries.get(len.toFixed(3));
             if (!g) return null;
             return (
-              <mesh key={`${i}:${p.z0}`} geometry={g} material={punchMaterial} position={[0, 0, p.z0 + SEGMENT_GAP / 2]}>
-                <Edges color={EDGE_COLOR} threshold={25} />
+              <mesh
+                key={`${i}:${p.z0}`}
+                geometry={g}
+                material={punchMaterial}
+                position={[0, 0, p.z0 + SEGMENT_GAP / 2]}
+                castShadow={!xray || punchCollision}
+                receiveShadow
+              >
+                <Edges color={punchEdge} threshold={30} transparent opacity={punchCollision ? 0.82 : 0.48} />
               </mesh>
             );
           })}

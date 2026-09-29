@@ -6,7 +6,8 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
+import { Edges } from '@react-three/drei';
 import type { FoldState, Mat4, PartModel } from '../core/types';
 import { mat4 } from '../core/geom';
 import { foldGeometry } from '../core/part';
@@ -23,7 +24,9 @@ export interface PartMeshProps {
   partTransform: Mat4;
   /** Flange tinted as the gauged one (toward the backgauge). */
   gaugedFlangeId?: string | null;
-  /** The frame reports a collision: the whole part turns red with an emissive pulse. */
+  /** Bend currently being worked: its zone and adjacent flanges receive the active-step finish. */
+  activeBendId?: string | null;
+  /** The frame reports a collision: collision red overrides every other part state. */
   collision?: boolean;
 }
 
@@ -69,7 +72,7 @@ function makeZoneRecord(part: PartModel, bendId: string, thickness: number): Zon
   return { bendId, parentIndex, thickness, geometry, positions, normals, indexFor, lastFraction: null, handedness: 1 };
 }
 
-export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlangeId, collision = false }: PartMeshProps) {
+export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlangeId, activeBendId, collision = false }: PartMeshProps) {
   const invalidate = useThree(s => s.invalidate);
 
   const flangeGeometries = useMemo(() => part.flanges.map((_, i) => makeFlangeGeometry(part, i, thickness)), [part, thickness]);
@@ -85,20 +88,36 @@ export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlan
   }, [part, thickness]);
   useEffect(() => () => { for (const z of zones) z.geometry.dispose(); }, [zones]);
 
-  const materials = useMemo(() => ({
-    sheet: new THREE.MeshStandardMaterial({ color: SIM_COLORS.sheet, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
-    gauged: new THREE.MeshStandardMaterial({ color: SIM_COLORS.gauged, metalness: 0.35, roughness: 0.55, side: THREE.DoubleSide }),
-    collision: new THREE.MeshStandardMaterial({ color: SIM_COLORS.collision, emissive: SIM_COLORS.collision, emissiveIntensity: 0.4, metalness: 0.2, roughness: 0.5, side: THREE.DoubleSide }),
-  }), []);
-  useEffect(() => () => { materials.sheet.dispose(); materials.gauged.dispose(); materials.collision.dispose(); }, [materials]);
-
-  // emissive pulse of the collision material (mutated through a ref inside the render loop)
-  const pulseRef = useRef<THREE.MeshStandardMaterial | null>(null);
-  useLayoutEffect(() => { pulseRef.current = materials.collision; }, [materials]);
-  useFrame(state => {
-    const m = pulseRef.current;
-    if (m && collision) m.emissiveIntensity = 0.35 + 0.35 * Math.sin(2 * Math.PI * 1.5 * state.clock.elapsedTime);
-  });
+  const materials = useMemo(() => {
+    const machinedSheet = (color: string, extra: Partial<THREE.MeshPhysicalMaterialParameters> = {}) =>
+      new THREE.MeshPhysicalMaterial({
+        color,
+        metalness: 0.58,
+        roughness: 0.36,
+        clearcoat: 0.08,
+        clearcoatRoughness: 0.58,
+        side: THREE.DoubleSide,
+        ...extra,
+      });
+    return {
+      sheet: machinedSheet(SIM_COLORS.sheet),
+      gauged: machinedSheet(SIM_COLORS.gauged, { metalness: 0.44, roughness: 0.4 }),
+      activeBend: machinedSheet(SIM_COLORS.activeBend, {
+        metalness: 0.38,
+        roughness: 0.4,
+        emissive: SIM_COLORS.activeBend,
+        emissiveIntensity: 0.08,
+      }),
+      collision: machinedSheet('#cbd2d8', {
+        metalness: 0.24,
+        roughness: 0.44,
+        emissive: SIM_COLORS.collision,
+        emissiveIntensity: 0.15,
+      }),
+    };
+  }, []);
+  useEffect(() => () => { for (const material of Object.values(materials)) material.dispose(); }, [materials]);
+  useEffect(() => { invalidate(); }, [activeBendId, gaugedFlangeId, collision, invalidate]);
 
   const folded = useMemo(() => foldGeometry(part, foldState), [part, foldState]);
 
@@ -143,9 +162,17 @@ export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlan
     invalidate();
   }, [folded, foldState, partTransform, zones, invalidate]);
 
-  const flangeMaterial = (flangeId: string): THREE.Material =>
-    collision ? materials.collision : flangeId === gaugedFlangeId ? materials.gauged : materials.sheet;
-  const zoneMaterial = collision ? materials.collision : materials.sheet;
+  const flangeMaterial = (flangeId: string, bendIds: readonly string[]): THREE.Material => {
+    if (collision) return materials.collision;
+    if (activeBendId != null && bendIds.includes(activeBendId)) return materials.activeBend;
+    if (flangeId === gaugedFlangeId) return materials.gauged;
+    return materials.sheet;
+  };
+  const zoneMaterial = (bendId: string): THREE.Material => {
+    if (collision) return materials.collision;
+    if (bendId === activeBendId) return materials.activeBend;
+    return materials.sheet;
+  };
 
   return (
     <group name="part">
@@ -155,10 +182,14 @@ export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlan
           name={`flange:${f.id}`}
           ref={m => { flangeMeshes.current[i] = m; }}
           geometry={flangeGeometries[i]}
-          material={flangeMaterial(f.id)}
+          material={flangeMaterial(f.id, f.bendIds)}
           matrixAutoUpdate={false}
           frustumCulled={false}
-        />
+          castShadow
+          receiveShadow
+        >
+          <Edges color={collision ? SIM_COLORS.collisionEdge : SIM_COLORS.sheetEdge} threshold={24} transparent opacity={0.74} />
+        </mesh>
       ))}
       {zones.map((z, i) => (
         <mesh
@@ -166,9 +197,11 @@ export function PartMesh({ part, thickness, foldState, partTransform, gaugedFlan
           name={`zone:${z.bendId}`}
           ref={m => { zoneMeshes.current[i] = m; }}
           geometry={z.geometry}
-          material={zoneMaterial}
+          material={zoneMaterial(z.bendId)}
           matrixAutoUpdate={false}
           frustumCulled={false}
+          castShadow
+          receiveShadow
         />
       ))}
     </group>

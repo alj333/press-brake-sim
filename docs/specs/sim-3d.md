@@ -4,9 +4,10 @@ The 3D simulation of ARCHITECTURE "Simulation": an R3F scene (machine, tools, pa
 section view, a transport bar and a zustand playback store. Depends on `types`, `geom`, `part`,
 `tools`, `machine` and the planner's timeline shape (`SimKeyframe[]` from `buildTimeline`); it
 never composes poses itself (`SimKeyframe.partTransform` is FINAL). Units: mm, degrees,
-seconds. Pure files (`store.ts`, `interpolate.ts`, `partGeometry.ts`, `scene.ts`, `labels.ts`)
+seconds. Pure files (`store.ts`, `interpolate.ts`, `partGeometry.ts`, `scene.ts`, `labels.ts`,
+`machineAppearance.ts`)
 are unit-tested in Node (`partGeometry.ts` imports only three's `ShapeUtils`/`Vector2`, allowed
-here); components (`*.tsx`, `threeUtils.ts`) are browser-only, not unit-tested, but exercised
+here); React components (`*.tsx`, `threeUtils.ts`) are browser-only and exercised
 headlessly (scratch/sim-smoke: Chromium + SwiftShader, dev and production builds, no page
 errors, screenshots). No dependency on `src/i18n`: every label goes through a `t(key, params)`
 prop with English defaults (§6).
@@ -169,28 +170,32 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
 | null }` is what every scene component consumes (`sceneFrameOf(simFrame)` converts).
 
 - `<SimViewport part program machine library setup? t? className? style? sectionInset?>`:
-  `<Canvas frameloop={playing || hasCollision ? 'always' : 'demand'} dpr=[1,2] camera fov 40
-  near 1 far 40000>` with hemisphere + two directional + ambient lights (three r155+ physical
-  units), a drei `<Grid>` on the floor (`tableTopY − table.height − 120`), `<OrbitControls
+  `<Canvas frameloop={playing ? 'always' : 'demand'} dpr=[1,1.6] camera fov 38 near 1 far 40000>`
+  with ACES filmic tone mapping, sRGB output, one shadow-casting key plus fill/rim/hemisphere/
+  ambient lights, a matte receiver floor and fading drei `<Grid>` at
+  `tableTopY − table.height − 120`, `<OrbitControls
   makeDefault>`, a `<CameraRig>` that applies the store's `cameraPreset` whenever the preset, the
   nonce, the framing target/radius or the program/part change: camera = target + dir·d with
-  `d = radius / tan(fov/2) × 1.25`, target `(10, 80, active station centre Z)`, `radius =
-  max(stack, 0.7·finished-part diagonal + 60)` where `stack = max(300, 1.3 × half the tool
-  stack height (table top → clamp bottom at TDC + clamp height))` — the integrator widened the
-  framing so a small part is seen together with its die, punch and clamp instead of from inside
-  the ram extrusion (400 mm without a part), directions `iso (−0.75, 0.6, −0.5)` (front-left-
-  above), `front (−1, 0.45, 0)` (from the operator, +Z to the right), `side (−0.5, 0.3, 1)`
+  `d = radius / tan(fov/2) × 1.18` with a bounded wide-viewport correction, target
+  `(18, part ? 34 : 95, active station centre Z)`, and radius
+  `max(240, 0.85·stackHalf, 0.56·finished-part diagonal + 58)` with a 400 mm no-part minimum.
+  This keeps the active bend, sheet and tooling as the visual subject and automatically refits
+  after focus-mode / viewport aspect changes. Directions are `iso (−0.82, 0.62, −0.52)`
+  (front-left-above), `front (−1, 0.36, 0)` (from the operator, +Z to the right),
+  `side (−0.4, 0.34, 1)`
   (from +Z looking along the bend line, offset to the operator side so the camera stays in
   front of the clamp: operator LEFT, backgauge RIGHT like the section view), `top (−0.05, 1, 0)`
   (operator at the bottom) with `d` raised so the camera is ≥ 150 mm above the ram beam at TDC.
   The tools, clamps and ram are extruded along the whole bed, so a preset must never put the
-  camera inside them. In the top preset the ram beam, clamps and punch are drawn translucent
-  (`xray` prop of `MachineModel` / `ToolModel`, opacity 0.28, no depth write) so the plan view
-  shows the part, fingers and punch segments under them. `<Clock>` drives `tick(min(dt, 0.25))`
+  camera inside them. With a part loaded, the upper beam, clamps and render-only ram fascia are
+  drawn translucent; the punch also becomes translucent in the top preset. This keeps the sheet
+  and bend line visible without changing collision geometry. `<Clock>` drives `tick(min(dt, 0.25))`
   from `useFrame` while playing, skipping the first delta after a pause (in demand mode the
   clock keeps running while paused, so that delta spans the whole pause). The interpolated frame comes from the memoised `currentFrame`
   selector; `invalidate()` is called on every frame change so a paused (demand) scene redraws
-  after a seek. DOM overlays (outside the Canvas): caption (`sim.step` + `sim.phase.*`, or
+  after a seek. A lower-left orientation gizmo, bilingual material/status legend and visual-only
+  `<CollisionMarkers>` at every exact `CollisionReport.location` add orientation and screen-stable
+  red/amber contact targets. DOM overlays (outside the Canvas): caption (`sim.step` + `sim.phase.*`, or
   `sim.idle` / `sim.noProgram`), the collision badge listing the active reports
   (`t(report.message.key, params)`, falling back to `"<kind> (<depth> mm)"` when the key is
   untranslated) with the `sim.pausedOnCollision` note, and the `<SectionView>` inset (bottom
@@ -203,10 +208,10 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   index attributes (`zoneIndices(±1)`) preallocated, the geometry swaps to the one matching
   `zoneHandedness` after a refill;
   `computeBoundingSphere` after each refill; `frustumCulled = false`). Matrices are written in a
-  layout effect that ends with `invalidate()`. Materials: `MeshStandardMaterial` `DoubleSide`,
-  colours `SIM_COLORS.sheet #c3c9d0`, gauged flange `#8fb5d9`, collision `#d63b3b` with an
-  emissive pulse (`0.35 + 0.35·sin(2π·1.5·t)` in `useFrame`). The whole part is red when the
-  frame has any collision (every report is between the part and a machine element).
+  layout effect that ends with `invalidate()`. Double-sided physical materials distinguish
+  neutral sheet, gauged flange and active bend; static edges preserve flange/cutout readability.
+  A collision changes the part to a restrained emissive metal with high-contrast red edges; it
+  does not start a continuous animation, so a paused scene remains demand-rendered.
 - `<MachineModel machine setup library ramY fingers collisionKinds xray?>`: the clamp / gap-clamp /
   ram / holder / table / backgauge-beam rectangles come straight from `machineObstacles(machine,
   setup, library, ramY, fingers)` (so the picture matches the collision model), extruded over
@@ -215,8 +220,11 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   `FingerSetting` at `(x, r, z − width/2)`; side frames as C-frames of `FRAME_PLATE = 80` mm at
   `frameLeft = (bedLength − distanceBetweenFrames)/2` / `frameRight` (back column `x ∈
   [throatDepth, throatDepth + FRAME_COLUMN 300]` from the floor to above the ram at TDC, bottom
-  and top arms). Every box carries a subtle drei `<Edges>` (35 % opacity). An element whose
-  `ObstacleKind` appears in `collisionKinds` is tinted red.
+  and top arms). `MachineAppearance` adds dimension-derived render-only feet/covers, bed and ram
+  fascias, accent strips, backgauge rails and hydraulic details. These nodes are tagged
+  `visualOnly` and never enter planning or collision checks; `machineObstacles()` remains the
+  authoritative envelope. Every box carries subtle edges and PBR paint/steel materials. An
+  element whose `ObstacleKind` appears in `collisionKinds` receives a red emissive cue.
 - `<ToolModel station punch? die? ramY step? collisionKinds xray?>`: `THREE.ExtrudeGeometry` of the
   profile polygon (`mirrorProfileX` when `punchFlipped` / `dieFlipped`) along +Z: the die over
   `[zStart, zEnd]` at the origin; the punch pieces (`punchPieces`: the station's `segments` with
@@ -224,7 +232,8 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   station, the step's `segments` / `punchLength` piece CENTRED in the station — `(zStart +
   zEnd)/2 ± punchLength/2`, the planner's convention) in a group at `(0, ramY − punch.height,
   0)` (geometry built once per station/tools/piece lengths, only the group moves). Punch/die
-  tinted red for `punch` / `die` collisions.
+  use distinct PBR steel finishes, subtly emphasize the active station, and receive red edges /
+  emissive cues for `punch` / `die` collisions while preserving the exact profile geometry.
 - `<SectionView part program machine library setup? frame? sectionZ? t? className? style?>`:
   `<canvas>` of the machine XY plane, −X (operator) on the LEFT, +X (backgauge) on the RIGHT, +Y
   up. `frame` defaults to the store's current frame (idle preview without keyframes), `sectionZ`
@@ -245,15 +254,18 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
   `toggle`), time scrubber (`<input type="range">` over the duration, 10 ms steps → `seekTime`),
   readout `m:ss.s / m:ss.s` (`formatTime`, rounded to tenths so 59.96 s reads `1:00.0`), speed
   select (`SIM_SPEEDS` 0.25 0.5 1 2 4, plus the current speed when it is not one of them),
-  continue-on-collision checkbox, section toggle, camera preset buttons, a status line (current
+  continue-on-collision checkbox, section toggle, camera refit + preset buttons, a status line (current
   step + phase, `sim.pausedOnCollision`), and the step list (`sim.step`, kind, punch/die names,
   included angle, turn, error ✖ / warning ⚠ counts; the current step highlighted; click =
   `seekStep`; `hideSteps` when the ui shows its own sequence panel). Controls are disabled
   without keyframes. Styles in `sim.css` (`pbsim-*` classes, light/dark). e2e hooks:
   `data-testid` `sim-step-back` / `sim-play` (`data-playing`) / `sim-step-forward` / `sim-scrubber` /
   `sim-time` (`data-time-s`, `data-duration-s`) / `sim-speed` / `sim-continue` / `sim-section` /
-  `sim-camera-<preset>` / `sim-status` (`data-step-index`, `data-phase`); the viewport caption is
-  `sim-caption`, the collision badge `sim-collisions`, the section canvas `section-view`.
+  `sim-camera-fit` / `sim-camera-<preset>` / `sim-status` (`data-step-index`, `data-phase`); the
+  viewport is `sim-viewport` (`data-active-bend`, `data-collision-markers`), the caption is
+  `sim-caption`, exact contact pins are `sim-collision-pin`, the collision badge is
+  `sim-collisions`, and the section canvas is `section-view`. The application shell also exposes
+  `focus-3d`; focus mode hides both data panels until the button or Escape restores them.
 
 ## 5. Rendering conventions
 
@@ -271,14 +283,16 @@ with the tallest mounted die/punch, defaults 60/120), no fingers.
 ## 6. i18n keys (`sim.*`; the ui adds en/th, `simLabelsEn` holds the English defaults)
 
 `sim.play`, `sim.pause`, `sim.stepBack`, `sim.stepForward`, `sim.speed`,
-`sim.continueOnCollision`, `sim.section`, `sim.camera`, `sim.camera.iso`, `sim.camera.front`,
+`sim.continueOnCollision`, `sim.section`, `sim.camera`, `sim.camera.fit`, `sim.camera.fitHint`,
+`sim.camera.iso`, `sim.camera.front`,
 `sim.camera.side`, `sim.camera.top`, `sim.phase.position`, `sim.phase.gauge`,
 `sim.phase.approach`, `sim.phase.bend`, `sim.phase.release`, `sim.phase.retract`,
 `sim.phase.reposition`, `sim.steps`, `sim.step {index, bendId}`, `sim.stepKind.bend`,
 `sim.stepKind.hem-flatten`, `sim.turn.none`, `sim.turn.rotate180`, `sim.turn.flip-front-back`,
 `sim.turn.flip-end-for-end`, `sim.noProgram`, `sim.pausedOnCollision`, `sim.collisions`,
 `sim.time`, `sim.operator`, `sim.backgauge`, `sim.ramY {y}`, `sim.finger {index, x, r, z}`,
-`sim.legend.sheet`, `sim.legend.gauged`, `sim.legend.collision`, `sim.idle`, `sim.warnings`.
+`sim.viewportAria`, `sim.legend.title`, `sim.legend.sheet`, `sim.legend.gauged`,
+`sim.legend.activeBend`, `sim.legend.tooling`, `sim.legend.collision`, `sim.idle`, `sim.warnings`.
 The collision badge uses the planner's `collisions.<kind>` messages. `withFallback(t)` wraps
 the ui's translator: when it returns the key itself (or ''), the English default is used, so the
 components render sensibly before the ui adds the strings; `defaultT` is the English-only
@@ -286,7 +300,7 @@ translator (interpolates `{param}`).
 
 ## 7. Tests and smoke checks
 
-`npx vitest run src/sim` (55 tests): `partGeometry.test.ts` (§3, plus: every sample × fractions
+`npx vitest run src/sim` (58 tests): `partGeometry.test.ts` (§3, plus: every sample × fractions
 0 / 0.004 / 0.02 / 0.5 / 1 / 1.1 — up, down and 135° bends — winding, radii, inner/outer normals,
 the φ = 0 seam on the parent's start edge and the φ = θf seam on the child's transformed
 zone-end edge within 1e-3 mm; `zoneIndices(−1)` = reversed `zoneIndices(1)`; a 180° hem zone

@@ -3,7 +3,7 @@
  * save-load, left tabs Part / Tools / Machine, centre 3D viewport + section + transport bar,
  * right tabs Sequence / Program, toasts, keyboard shortcuts). See docs/specs/ui.md §3.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SimViewport, SectionView, TransportBar, useSimStore } from '../sim';
 import { LanguageProvider, useI18n } from '../i18n';
 import { useProjectStore, selectMachine } from './store';
@@ -85,11 +85,13 @@ function AppShell() {
   const setRightTab = useProjectStore(s => s.setRightTab);
   const showSection = useSimStore(s => s.showSection);
   const stepCount = program?.steps.length ?? 0;
+  const [focus3d, setFocus3d] = useState(false);
 
   useEffect(() => { void useProjectStore.getState().loadLibrary(); }, []);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') { setFocus3d(false); return; }
       if (isTypingTarget(e.target)) return;
       const sim = useSimStore.getState();
       if (e.code === 'Space') { e.preventDefault(); if (sim.keyframes.length) sim.toggle(); }
@@ -113,7 +115,7 @@ function AppShell() {
   return (
     <div className="app">
       <Header />
-      <div className="app-body">
+      <div className={focus3d ? 'app-body app-body-focus3d' : 'app-body'}>
         <aside className="col col-left">
           <Tabs tabs={leftTabs} active={leftTab} onChange={setLeftTab} />
           <div className="col-scroll">
@@ -125,6 +127,17 @@ function AppShell() {
         <main className="col col-centre">
           <div className="viewport-frame" aria-label={t('app.viewport')}>
             <SimViewport part={part} program={program} machine={machine} library={simLibrary} setup={setup} t={t} sectionInset={false} className="viewport" />
+            <button
+              type="button"
+              className="viewport-focus-btn"
+              data-testid="focus-3d"
+              aria-pressed={focus3d}
+              aria-keyshortcuts="Escape"
+              onClick={() => setFocus3d(on => !on)}
+            >
+              <span aria-hidden="true">{focus3d ? '↙' : '⛶'}</span>
+              {t(focus3d ? 'app.focus3d.exit' : 'app.focus3d.enter')}
+            </button>
           </div>
           {showSection && (
             <div className="section-frame" aria-label={t('app.sectionView')}>

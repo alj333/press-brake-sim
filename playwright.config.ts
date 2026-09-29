@@ -5,6 +5,7 @@
  *
  * Browser: `/opt/pw-browsers/chromium` (the CI image), overridable with `PW_CHROMIUM=/path/to/chromium`;
  * unset both (PW_CHROMIUM=) to use the browser installed by `npx playwright install chromium`.
+ * Set `PW_BASE_URL` to exercise an already-running build; otherwise the config starts local preview on :4173.
  * Software GL (SwiftShader) so the three.js viewport renders on machines without a GPU.
  */
 import { existsSync } from 'node:fs';
@@ -13,6 +14,8 @@ import { defineConfig } from '@playwright/test';
 const DEFAULT_CHROMIUM = '/opt/pw-browsers/chromium';
 const envPath = process.env['PW_CHROMIUM'];
 const executablePath = envPath !== undefined ? (envPath || undefined) : (existsSync(DEFAULT_CHROMIUM) ? DEFAULT_CHROMIUM : undefined);
+const externalBaseURL = process.env['PW_BASE_URL'];
+const baseURL = externalBaseURL ?? 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,7 +27,7 @@ export default defineConfig({
   reporter: [['list']],
   outputDir: './scratch/e2e/test-results',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL,
     viewport: { width: 1440, height: 900 },
     headless: true,
     launchOptions: {
@@ -34,10 +37,12 @@ export default defineConfig({
     },
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'npx vite preview --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173/',
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  ...(externalBaseURL ? {} : {
+    webServer: {
+      command: 'npx vite preview --port 4173 --strictPort',
+      url: 'http://127.0.0.1:4173/',
+      reuseExistingServer: true,
+      timeout: 60_000,
+    },
+  }),
 });

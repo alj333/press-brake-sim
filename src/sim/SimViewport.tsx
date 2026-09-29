@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Grid, OrbitControls } from '@react-three/drei';
+import { GizmoHelper, GizmoViewport, OrbitControls } from '@react-three/drei';
 import type { BendProgram, Machine, PartModel, ToolSetup, Vec3 } from '../core/types';
 import { foldGeometry, finishedState } from '../core/part';
 import { machineLevels } from '../core/machine';
@@ -20,6 +20,8 @@ import { PartMesh } from './PartMesh';
 import { MachineModel } from './MachineModel';
 import { ToolModel } from './ToolModel';
 import { SectionView } from './SectionView';
+import { CollisionMarkers } from './CollisionMarkers';
+import { SceneLighting } from './SceneLighting';
 import { withFallback } from './labels';
 import type { TranslateFn } from './labels';
 import './sim.css';
@@ -47,18 +49,18 @@ export interface SimViewportProps extends SimSceneProps {
  * clamp (−X) or above the ram: a camera inside those extrusions sees only their inner faces.
  */
 const PRESET_DIRS: Record<CameraPreset, Vec3> = {
-  iso: { x: -0.9, y: 0.42, z: -0.5 },
-  front: { x: -1, y: 0.25, z: 0 },
-  side: { x: -0.35, y: 0.22, z: 1 },
+  iso: { x: -0.82, y: 0.62, z: -0.52 },
+  front: { x: -1, y: 0.36, z: 0 },
+  side: { x: -0.4, y: 0.34, z: 1 },
   top: { x: -0.05, y: 1, z: 0 },
 };
 /** Camera distance = radius / tan(fov/2) × this. */
-const FRAME_FACTOR = 1.25;
+const FRAME_FACTOR = 1.18;
 /** The top preset looks down from at least this far above the ram beam at TDC (mm). */
 const TOP_CLEARANCE = 150;
 /** Largest time step fed to the store per rendered frame (a hidden tab must not jump ahead). */
 const MAX_TICK_S = 0.25;
-const CAMERA_OPTIONS = { fov: 40, near: 1, far: 40000, position: [-900, 700, -700] as [number, number, number] };
+const CAMERA_OPTIONS = { fov: 38, near: 1, far: 40000, position: [-900, 700, -700] as [number, number, number] };
 
 function Clock() {
   const wasPlaying = useRef(false);
@@ -85,6 +87,7 @@ function CameraRig({ target, radius, ramTopY, sceneKey }: RigProps) {
   const preset = useSimStore(s => s.cameraPreset);
   const nonce = useSimStore(s => s.cameraNonce);
   const camera = useThree(s => s.camera);
+  const aspect = useThree(s => s.size.width / Math.max(1, s.size.height));
   const controls = useThree(s => s.controls) as unknown as { target: THREE.Vector3; update(): void } | null;
   const invalidate = useThree(s => s.invalidate);
   useEffect(() => {
@@ -92,6 +95,7 @@ function CameraRig({ target, radius, ramTopY, sceneKey }: RigProps) {
     const l = Math.hypot(dir.x, dir.y, dir.z) || 1;
     const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 40;
     let d = (radius / Math.tan((fov / 2) * (Math.PI / 180))) * FRAME_FACTOR;
+    if (preset !== 'top' && aspect > 1.2) d /= Math.min(1.34, Math.sqrt(aspect / 1.08));
     if (preset === 'top') d = Math.max(d, ((ramTopY + TOP_CLEARANCE - target.y) * l) / dir.y);
     camera.up.set(0, 1, 0);
     camera.position.set(target.x + (dir.x / l) * d, target.y + (dir.y / l) * d, target.z + (dir.z / l) * d);
@@ -99,7 +103,7 @@ function CameraRig({ target, radius, ramTopY, sceneKey }: RigProps) {
     camera.updateProjectionMatrix();
     if (controls) { controls.target.set(target.x, target.y, target.z); controls.update(); }
     invalidate();
-  }, [preset, nonce, sceneKey, target, radius, ramTopY, camera, controls, invalidate]);
+  }, [preset, nonce, sceneKey, target, radius, ramTopY, aspect, camera, controls, invalidate]);
   return null;
 }
 
@@ -116,7 +120,7 @@ function SceneContent({ part, program, machine, library, setup, frame, sceneKey 
   // always drawn translucent so the part stays visible; the punch itself goes translucent only in
   // the plan view, where it would hide the bend line.
   const topView = useSimStore(s => s.cameraPreset === 'top');
-  const xray = true;
+  const xray = part !== null || topView;
   const toolXray = topView;
 
   const step = stepOf(program, frame);
@@ -135,31 +139,24 @@ function SceneContent({ part, program, machine, library, setup, frame, sceneKey 
     if (!part) return Math.max(400, stackHalf * 1.3);
     const b = foldGeometry(part, finishedState(part)).bounds;
     const diag = Math.hypot(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
-    return Math.max(140, diag * 0.55 + 40);
+    return Math.max(240, stackHalf * 0.85, diag * 0.56 + 58);
   }, [part, stackHalf]);
   const zc = stationCentreZ(station ?? setup.stations[0], machine);
-  const target = useMemo<Vec3>(() => ({ x: 10, y: part ? 45 : 80, z: zc }), [zc, part]);
+  const target = useMemo<Vec3>(() => ({ x: 18, y: part ? 34 : 95, z: zc }), [zc, part]);
   const ramTopY = levels.tdcClampY + machine.ram.clampHeight + machine.ram.height;
 
   return (
     <>
-      <color attach="background" args={['#e9ecf0']} />
-      <hemisphereLight args={['#ffffff', '#5a6068', 1.6]} />
-      <directionalLight position={[-800, 1200, -500]} intensity={3.2} />
-      <directionalLight position={[600, 500, 900]} intensity={1.2} />
-      <ambientLight intensity={0.9} />
-      <Grid
-        position={[0, floorY, machine.bedLength / 2]}
-        args={[machine.bedLength + 3000, 4000]}
-        cellSize={100}
-        sectionSize={500}
-        cellColor="#c3c9d1"
-        sectionColor="#9aa3ad"
-        fadeDistance={8000}
-        fadeStrength={1.5}
-        infiniteGrid
+      <SceneLighting floorY={floorY} focusZ={zc} bedLength={machine.bedLength} throatDepth={machine.throatDepth} />
+      <OrbitControls
+        makeDefault
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={120}
+        maxDistance={20000}
+        minPolarAngle={0.05}
+        maxPolarAngle={Math.PI * 0.49}
       />
-      <OrbitControls makeDefault enableDamping={false} maxDistance={20000} />
       <CameraRig target={target} radius={radius} ramTopY={ramTopY} sceneKey={sceneKey} />
       <Clock />
       <MachineModel machine={machine} setup={setup} library={library} ramY={frame.ramY} fingers={frame.backgauge} collisionKinds={kinds} xray={xray} />
@@ -183,8 +180,13 @@ function SceneContent({ part, program, machine, library, setup, frame, sceneKey 
           partTransform={frame.partTransform}
           gaugedFlangeId={step?.placement.gaugedFlangeId ?? null}
           collision={frame.collisions.length > 0}
+          activeBendId={step?.bendId ?? null}
         />
       )}
+      <CollisionMarkers collisions={frame.collisions} />
+      <GizmoHelper alignment="bottom-left" margin={[64, 62]}>
+        <GizmoViewport axisColors={['#ef4444', '#22a06b', '#2563eb']} labelColor="#17212b" />
+      </GizmoHelper>
     </>
   );
 }
@@ -215,17 +217,41 @@ export function SimViewport({ part, program, machine, library, setup, t, classNa
   };
 
   return (
-    <div className={className ? `pbsim-viewport ${className}` : 'pbsim-viewport'} style={style}>
+    <div
+      className={className ? `pbsim-viewport ${className}` : 'pbsim-viewport'}
+      style={style}
+      role="region"
+      aria-label={tt('sim.viewportAria')}
+      data-testid="sim-viewport"
+      data-collision-markers={frame.collisions.length}
+      data-active-bend={step?.bendId ?? ''}
+    >
       <Canvas
-        frameloop={playing || hasCollision ? 'always' : 'demand'}
-        dpr={[1, 2]}
+        frameloop={playing ? 'always' : 'demand'}
+        dpr={[1, 1.6]}
         camera={CAMERA_OPTIONS}
-        gl={{ antialias: true }}
+        shadows
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        onCreated={({ gl }) => {
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
+          gl.shadowMap.type = THREE.PCFShadowMap;
+        }}
       >
         <SceneContent part={part} program={program} machine={machine} library={library} setup={effSetup} frame={frame} sceneKey={sceneKey} />
       </Canvas>
       {(caption || (!hasKeyframes && part)) && (
         <div className="pbsim-caption" data-testid="sim-caption">{caption || tt('sim.idle')}</div>
+      )}
+      {part && !sectionInset && (
+        <div className="pbsim-visual-legend" data-testid="sim-visual-legend" aria-label={tt('sim.legend.title')}>
+          <span><i aria-hidden="true" className="pbsim-swatch pbsim-swatch-sheet" />{tt('sim.legend.sheet')}</span>
+          <span><i aria-hidden="true" className="pbsim-swatch pbsim-swatch-gauged" />{tt('sim.legend.gauged')}</span>
+          <span><i aria-hidden="true" className="pbsim-swatch pbsim-swatch-active" />{tt('sim.legend.activeBend')}</span>
+          <span><i aria-hidden="true" className="pbsim-swatch pbsim-swatch-tool" />{tt('sim.legend.tooling')}</span>
+          <span><i aria-hidden="true" className="pbsim-swatch pbsim-swatch-collision" />{tt('sim.legend.collision')}</span>
+        </div>
       )}
       {hasCollision && (
         <div className="pbsim-collisions" role="status" data-testid="sim-collisions">

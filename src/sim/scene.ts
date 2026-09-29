@@ -39,19 +39,23 @@ export const FRAME_COLUMN = 300;
 
 /** Scene colours (hex). */
 export const SIM_COLORS = {
-  sheet: '#c3c9d0',
-  gauged: '#8fb5d9',
-  collision: '#d63b3b',
-  punch: '#59636f',
-  die: '#59636f',
-  clamp: '#5b6474',
-  ram: '#6b7484',
-  table: '#6d7683',
-  holder: '#7a8390',
-  frame: '#7d8694',
-  beam: '#4a5c7a',
-  finger: '#3b6fb6',
-  grid: '#9aa3ad',
+  sheet: '#eef2f4',
+  sheetEdge: '#182632',
+  gauged: '#2f80bf',
+  activeBend: '#b96a12',
+  collision: '#d72f3f',
+  collisionEdge: '#6f0c1a',
+  punch: '#aab8c3',
+  die: '#506274',
+  toolEdge: '#182632',
+  clamp: '#586979',
+  ram: '#2f465d',
+  table: '#334554',
+  holder: '#91a0ac',
+  frame: '#1f2d39',
+  beam: '#31465c',
+  finger: '#246fae',
+  grid: '#738391',
 } as const;
 
 export function sceneFrameOf(f: SimFrame): SceneFrame {

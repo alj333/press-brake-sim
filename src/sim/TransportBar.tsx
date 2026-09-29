@@ -80,6 +80,9 @@ export function TransportBar({ t, program, className, style, hideSteps = false }
         </button>
         <span className="pbsim-field">
           <span>{tt('sim.camera')}</span>
+          <button type="button" className="pbsim-btn" onClick={() => actions.setCameraPreset(cameraPreset)} data-testid="sim-camera-fit" title={tt('sim.camera.fitHint')}>
+            {tt('sim.camera.fit')}
+          </button>
           {PRESETS.map(p => (
             <button key={p} type="button" className={cameraPreset === p ? 'pbsim-btn pbsim-btn-on' : 'pbsim-btn'} onClick={() => actions.setCameraPreset(p)} aria-pressed={cameraPreset === p} data-testid={`sim-camera-${p}`}>
               {tt(`sim.camera.${p}`)}

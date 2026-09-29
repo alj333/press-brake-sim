@@ -31,7 +31,7 @@ export interface ErrorLog {
 function isExpectedNoise(text: string, url: string): boolean {
   if (/\/api\/library/.test(url) || /\/api\/library/.test(text)) return true;
   // SwiftShader / headless GL warnings arrive as console errors on some builds
-  if (/GPU stall due to ReadPixels|SwiftShader|GroupMarkerNotSet|WebGL: too many errors/.test(text)) return true;
+  if (/GPU stall due to ReadPixels|SwiftShader|GroupMarkerNotSet/.test(text)) return true;
   return false;
 }
 

@@ -43,9 +43,11 @@ Express 5 server for the shared tool library; Docker image for a Synology NAS.
   - Collision model: the folded part is swept through the bend against punch, clamp, ram, die, holder, table,
     fingers, backgauge beam and side frames; minimum-leg, tool-angle, daylight, stroke, tonnage and
     tool-load checks; hems expand into a pre-bend + a hem-flatten step on a hemming station.
-- **Simulation**: 3D machine + tools + folding part (constant-arc-length bend zones), playback with phases
-  (position, gauge, approach, bend, release, retract, reposition), camera presets, 2D section view (operator
-  side left, backgauge right), collision highlighting with auto-pause.
+- **Simulation**: dimension-driven 3D machine skin + exact tool profiles + folding part (constant-arc-length
+  bend zones), physically based materials, shadows and floor depth cues, playback with phases (position,
+  gauge, approach, bend, release, retract, reposition), camera presets with one-click refit, focus mode,
+  view cube, bilingual visual legend, exact 3D collision markers with auto-pause, and a 2D section view
+  (operator side left, backgauge right).
 - **Program**: printable bilingual bend program (A4 landscape), JSON / CSV export; project files (`.pbsim.json`)
   that carry the part, setup, program and the custom tools they reference.
 
