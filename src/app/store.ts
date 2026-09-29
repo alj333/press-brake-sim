@@ -18,7 +18,7 @@ import { STANDARD_MATERIAL_ID, buildStandardLibrary, defaultToolSetup, newCustom
 import { defaultMachine, validateMachine, validateSetup } from '../core/machine';
 import { LibraryStore, findMachine, findMaterial } from '../core/library';
 import type { LibraryItem } from '../core/library';
-import { buildTimeline, defaultPlannerOptions, planProgram } from '../core/planner';
+import { buildTimeline, defaultPlannerOptions, isPlanEligibleBend, planProgram } from '../core/planner';
 import type { PlannerInput, PlannerProgress } from '../core/planner';
 // pure pieces of the sim module (the barrel also pulls in the R3F components)
 import { useSimStore } from '../sim/store';
@@ -85,6 +85,8 @@ export interface ProjectActions {
   loadFlat(flat: FlatPattern): void;
   setPartName(name: string): void;
   setBend(id: string, patch: BendPatch): void;
+  /** Move a bend one place in the effective bend sequence and switch to fixed order. */
+  moveBendInOrder(id: string, offset: -1 | 1): boolean;
   addBend(p0: Vec2, p1: Vec2, direction?: BendDirection): string | null;
   removeBend(id: string): void;
   setMaterial(id: string): void;
@@ -203,6 +205,54 @@ export function selectMachine(s: Pick<ProjectState, 'project' | 'library'>): Mac
 
 export function selectMaterial(s: Pick<ProjectState, 'project' | 'library'>): Material | undefined {
   return findMaterial(s.library, s.project.materialId);
+}
+
+/**
+ * Bend ids in the order an operator is currently working with: an explicit fixed order,
+ * otherwise the last planned program, then the imported BENDS-table order before the first plan.
+ * Only links accepted by the fold model are orderable. A partial fixed/program order is completed
+ * in the planner's link order so this normalization exactly matches `searchSequence`.
+ */
+export function bendOrderIds(project: Project, fixedOrder: string[] | null): string[] {
+  const plannerOrder = planEligibleBendIds(project.part);
+  const valid = new Set(plannerOrder);
+  const importedOrder = project.part?.flat.bends.map(bend => bend.id).filter(id => valid.has(id)) ?? [];
+  const programOrder = programBendIds(project.program);
+  const preferred = fixedOrder ?? (programOrder.length ? programOrder : importedOrder);
+  const fallback = fixedOrder || programOrder.length ? plannerOrder : importedOrder;
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const id of [...preferred, ...fallback]) {
+    if (valid.has(id) && !seen.has(id)) {
+      seen.add(id);
+      ordered.push(id);
+    }
+  }
+  return ordered;
+}
+
+function planEligibleBendIds(part: PartModel | null): string[] {
+  const bendById = new Map(part?.flat.bends.map(bend => [bend.id, bend]) ?? []);
+  return part?.links.flatMap(link => {
+    const bend = bendById.get(link.bendId);
+    return bend && isPlanEligibleBend(bend) ? [link.bendId] : [];
+  }) ?? [];
+}
+
+function programBendIds(program: BendProgram | null): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const step of program?.steps ?? []) {
+    if (step.kind === 'bend' && !seen.has(step.bendId)) {
+      seen.add(step.bendId);
+      ids.push(step.bendId);
+    }
+  }
+  return ids;
+}
+
+function sameOrder(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
 export function selectSetupMessages(s: Pick<ProjectState, 'project' | 'library'>): Message[] {
@@ -371,8 +421,9 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
       const materialId = flat.materialId && findMaterial(get().library, flat.materialId) ? flat.materialId : get().project.materialId;
       set(s => {
         // a fixed order only keeps the ids that still exist (the planner appends the rest)
-        const ids = new Set(flat.bends.map(b => b.id));
-        const keptOrder = s.fixedOrder ? s.fixedOrder.filter(id => ids.has(id)) : [];
+        const bendIds = new Set(flat.bends.map(bend => bend.id));
+        const plannableIds = new Set(planEligibleBendIds(part));
+        const keptOrder = s.fixedOrder ? s.fixedOrder.filter(id => plannableIds.has(id)) : [];
         const fixedOrder = keptOrder.length > 0 ? keptOrder : null;
         const plannerOptions: PlannerOptions = { ...s.project.plannerOptions };
         if (fixedOrder) plannerOptions.fixedOrder = fixedOrder; else delete plannerOptions.fixedOrder;
@@ -383,7 +434,7 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
           fixedOrder,
           selectedStepIndex: null,
           planError: null,
-          selectedBendId: s.selectedBendId && ids.has(s.selectedBendId) ? s.selectedBendId : null,
+          selectedBendId: s.selectedBendId && bendIds.has(s.selectedBendId) ? s.selectedBendId : null,
           activeRightTab: s.project.program ? 'sequence' : s.activeRightTab,
         };
       });
@@ -548,6 +599,20 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
         if (!part) return;
         if (!part.flat.bends.some(b => b.id === id)) return;
         rebuildWithBends(part.flat.bends.map(b => (b.id === id ? patchBend(b, patch) : b)));
+      },
+
+      moveBendInOrder(id, offset) {
+        const s = get();
+        if (!s.project.part || s.planning) return false;
+        const order = bendOrderIds(s.project, s.fixedOrder);
+        const from = order.indexOf(id);
+        const to = from + offset;
+        if (from < 0 || to < 0 || to >= order.length) return false;
+        const next = [...order];
+        next.splice(from, 1);
+        next.splice(to, 0, id);
+        get().setFixedOrder(next);
+        return true;
       },
 
       addBend(p0, p1, direction = 'up') {
@@ -757,8 +822,13 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
       setFixedOrder(ids) {
         set(s => {
           const opts: PlannerOptions = { ...s.project.plannerOptions };
-          if (ids && ids.length) opts.fixedOrder = [...ids]; else delete opts.fixedOrder;
-          return { project: { ...s.project, plannerOptions: opts }, fixedOrder: ids && ids.length ? [...ids] : null };
+          const fixedOrder = ids && ids.length ? [...ids] : null;
+          if (fixedOrder) opts.fixedOrder = fixedOrder; else delete opts.fixedOrder;
+          return {
+            project: { ...s.project, plannerOptions: opts },
+            fixedOrder,
+            programStale: s.project.program ? true : s.programStale,
+          };
         });
       },
 
@@ -770,7 +840,10 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
       // ── project files ───────────────────────────────────────────────────
       saveProject() {
         const s = get();
-        const json = serializeProject(s.project, s.library);
+        // A stale program belongs to earlier geometry/setup/order inputs. Do not let a saved file
+        // reopen it as current, because programStale is intentionally UI state rather than project data.
+        const project = s.programStale ? { ...s.project, program: null } : s.project;
+        const json = serializeProject(project, s.library);
         get().notify({ key: 'app.notice.projectSaved', params: { name: s.project.name || 'project' } }, 'info');
         return json;
       },
@@ -793,7 +866,16 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
         let library = libraryStore.get();
         const machineId = findMachine(library, project.machineId) ? project.machineId : s.project.machineId;
         const materialId = findMaterial(library, project.materialId) ? project.materialId : s.project.materialId;
-        const next: Project = { ...project, machineId, materialId, setup: { ...project.setup, machineId } };
+        let next: Project = { ...project, machineId, materialId, setup: { ...project.setup, machineId } };
+        const requestedFixedOrder = next.plannerOptions.fixedOrder ?? null;
+        const normalizedFixedOrder = requestedFixedOrder ? bendOrderIds(next, requestedFixedOrder) : [];
+        const fixedOrder = normalizedFixedOrder.length ? normalizedFixedOrder : null;
+        if (requestedFixedOrder) {
+          const plannerOptions: PlannerOptions = { ...next.plannerOptions };
+          if (fixedOrder?.length) plannerOptions.fixedOrder = fixedOrder; else delete plannerOptions.fixedOrder;
+          next = { ...next, plannerOptions };
+        }
+        const orderDiffers = !!next.program && !!fixedOrder && !sameOrder(programBendIds(next.program), fixedOrder);
         // The file carries a snapshot of its machine. A standard machine that was never edited
         // here takes the snapshot (the project brings the shop's calibration to this PC); a
         // machine edited here — the shop's shared state — wins, and a program computed for the
@@ -816,8 +898,8 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
           dxfFlat: null, recognized: null, mesh: null, matchInfo: null,
           importWarnings: next.part?.flat.warnings ?? [],
           importing: false, planning: false, planProgress: null,
-          fixedOrder: next.plannerOptions.fixedOrder ?? null,
-          programStale: machineDiffers, planError: null, selectedBendId: null, selectedStepIndex: next.program?.steps.length ? 0 : null,
+          fixedOrder,
+          programStale: machineDiffers || orderDiffers, planError: null, selectedBendId: null, selectedStepIndex: next.program?.steps.length ? 0 : null,
         });
         if (next.language !== s.project.language) get().setLanguage(next.language);
         pushKeyframes(next.program, next.part);

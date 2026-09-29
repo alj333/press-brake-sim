@@ -1,6 +1,6 @@
 /** planner — bend-sequence planner (ARCHITECTURE "Bend-sequence planner", docs/specs/planner.md). */
 export { planProgram, buildBendStep, buildHemFlattenStep, RETRACT_MARGIN } from './program';
-export { defaultPlannerOptions, createContext, HEM_PREBEND, MAX_BENDS } from './context';
+export { defaultPlannerOptions, createContext, isPlanEligibleBend, HEM_PREBEND, MAX_BENDS } from './context';
 export type { PlannerInput, PlannerProgress, PlannerLibrary, PlanContext, BendInfo, StationInfo } from './context';
 export { computePlacement, computePlacementDetails, classifyTurn, rotationAngleDeg, TURN_NONE_MAX_DEG } from './placement';
 export type { PlacementDetails } from './placement';

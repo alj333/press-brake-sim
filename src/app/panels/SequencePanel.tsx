@@ -15,8 +15,8 @@ import { FeasibilityAssistant } from './FeasibilityAssistant';
 
 const TURN_ICON: Record<Turn, string> = { none: '→', rotate180: '↻', 'flip-front-back': '⇅', 'flip-end-for-end': '⇄' };
 
-function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver, onDrop }: {
-  step: BendStep; selected: boolean; dragging: boolean; onSelect: () => void;
+function StepCard({ step, selected, dragging, disabled, onSelect, onDragStart, onDragOver, onDrop }: {
+  step: BendStep; selected: boolean; dragging: boolean; disabled: boolean; onSelect: () => void;
   onDragStart: (e: DragEvent<HTMLDivElement>) => void; onDragOver: (e: DragEvent<HTMLDivElement>) => void; onDrop: (e: DragEvent<HTMLDivElement>) => void;
 }) {
   const { t, tm } = useI18n();
@@ -34,10 +34,11 @@ function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver,
       data-turn={step.manipulation.turn}
       data-errors={errors}
       data-feasible-collisions={errors === 0 ? 'true' : 'false'}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      draggable={!disabled}
+      data-drag-disabled={disabled ? 'true' : 'false'}
+      onDragStart={disabled ? undefined : onDragStart}
+      onDragOver={disabled ? undefined : onDragOver}
+      onDrop={disabled ? undefined : onDrop}
       onClick={onSelect}
       role="listitem"
     >
@@ -112,7 +113,7 @@ export function SequencePanel() {
   const canPlan = !!project.part && project.setup.stations.length > 0 && !planning;
 
   const reorder = (from: number, to: number): void => {
-    if (!program || from === to) return;
+    if (!program || planning || from === to) return;
     const ids = program.steps.filter(s => s.kind === 'bend').map(s => s.bendId);
     const uniq = ids.filter((id, i) => ids.indexOf(id) === i);
     const fromId = program.steps[from]?.bendId, toId = program.steps[to]?.bendId;
@@ -143,7 +144,7 @@ export function SequencePanel() {
           <span className="small">
             {t('sequence.order')}:{' '}
             {fixedOrder
-              ? <><span className="badge badge-user">{fixedOrder.join(' → ')}</span> <button type="button" className="btn btn-small" data-testid="order-auto" onClick={() => { actions.setFixedOrder(null); void actions.plan(); }}>{t('sequence.orderAuto')}</button></>
+              ? <><span className="badge badge-user">{fixedOrder.join(' → ')}</span> <button type="button" className="btn btn-small" disabled={planning} data-testid="order-auto" onClick={() => { actions.setFixedOrder(null); void actions.plan(); }}>{t('sequence.orderAuto')}</button></>
               : <span className="badge">{t('sequence.orderAuto')}</span>}
           </span>
         </div>
@@ -194,6 +195,7 @@ export function SequencePanel() {
                   step={step}
                   selected={step.index === selectedStepIndex}
                   dragging={dragIndex === step.index}
+                  disabled={planning}
                   onSelect={() => actions.selectStep(step.index)}
                   onDragStart={e => { setDragIndex(step.index); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(step.index)); }}
                   onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}

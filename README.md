@@ -19,8 +19,9 @@ Express 5 server for the shared tool library; Docker image for a Synology NAS.
   - **3D sheet recognition**: thickness, planar flanges, bend cylinders → bend angles / radii / directions
     and an unfolded flat pattern; when a DXF is loaded as well, the 3D bends are matched onto the DXF
     (the drawing stays the geometry source, the model supplies angle / radius / direction).
-  - Bends table with editable angle, inner radius, direction, k-factor, trial-bend correction, hems; per-attribute
-    source badges (DXF / STEP / mesh / user / default); add bends on the flat view.
+  - Bends table with editable angle, inner radius, direction, k-factor, trial-bend correction, hems and
+    touch-friendly ▲ / ▼ sequence controls that immediately re-plan; per-attribute source badges
+    (DXF / STEP / mesh / user / default); add bends on the flat view.
 - **Tooling & machine**
   - Standard library: Promecam / European style punches (straight 88° / 85°, gooseneck, acute 30° / 28°,
     radius R3 / R5 / R10, hemming), V dies V6 – V80 at 88°, V12 / V16 at 85° and 30°, a 4-way multi-V block,
@@ -35,7 +36,7 @@ Express 5 server for the shared tool library; Docker image for a Synology NAS.
     shop sees the same custom tools and machine calibration.
 - **Planner**
   - Bend-sequence search (exhaustive ≤ 7 bends, beam search above) minimising flips / rotations / station
-    changes / short flanges / collision warnings, or a **fixed order** by dragging the steps.
+    changes / short flanges / collision warnings, or a **fixed order** from the BENDS table or by dragging the steps.
   - Per step: station and V selection, included / loaded angle with springback and overbend, actual air-bend
     radius, ram depth, pinch and retract heights, force (kN / t) and % of tool rating, punch length / segments /
     part Z offset, per-finger backgauge X / R / Z and contact type, outside dimension + bend deduction with the

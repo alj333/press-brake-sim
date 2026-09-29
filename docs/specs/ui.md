@@ -122,6 +122,8 @@ pushes `buildTimeline(program, part, material, machine, simLibrary)` into `useSi
 - `setBend(id, patch)` (`direction | angle | innerRadius | kFactor | angleCorrection | hem |
   hemGap | p0 | p1`; changed attributes get `sources.* = 'user'`; angle clamped to [0.5, 180], 180
   ⇒ `hem: 'closed'`; ri ≥ 0; k ∈ [0.05, 1]; correction ∈ [−45, 45], 0 removes it),
+  `moveBendInOrder(id, ±1)` (starts from the fixed order, last planned order, or source order; switches to
+  fixed order and lets the BENDS-table caller re-plan immediately),
   `addBend(p0, p1, direction = 'up')` → next free `B<n>`, angle 90, ri = `defaultInnerRadius(t,
   material)` (1.28·t mild steel), k = material k, sources all `'user'`, selected; `null` for a
   line shorter than 0.5 mm; `removeBend(id)`.
@@ -142,10 +144,11 @@ pushes `buildTimeline(program, part, material, machine, simLibrary)` into `useSi
   keyframes, step 0 selected, right tab Sequence, toast (`app.notice.planned` /
   `plannedInfeasible`); `AbortError` → silent; `RangeError` / other → `planError`
   (`errors.plan.failed {detail}`).
-- `setFixedOrder(ids | null)` (`plannerOptions.fixedOrder`; an empty list clears it),
+- `setFixedOrder(ids | null)` (`plannerOptions.fixedOrder`; an empty list clears it; an existing program is marked stale),
   `setPlannerOptions(patch)` (marks the program stale).
 - `saveProject(): string` (JSON of `Project` + `app`, `savedAt`, `libraryOverlay` = referenced
-  items + every custom item), `loadProject(json)` (validated by `parseProject`; a running plan is
+  items + every custom item; an obsolete program is omitted while `programStale` is true),
+  `loadProject(json)` (validated by `parseProject`; a running plan is
   cancelled; overlay items the library lacks are upserted; unknown machine / material ids fall
   back; the program is kept only when every step has the full `BendStep` shape and its bend ids
   exist — otherwise it is dropped with an `app.notice.programDropped` toast; zero planner weights

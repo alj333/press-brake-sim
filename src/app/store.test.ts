@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { loadTruth, readSampleBytes, readSampleText, samplePath } from '../core/testing/fixtures';
 import { LibraryStore } from '../core/library';
 import { currentStepIndex, useSimStore } from '../sim/store';
-import { createProjectStore, selectMachine, selectMachineMessages, selectMaterial, selectSetupMessages } from './store';
+import { bendOrderIds, createProjectStore, selectMachine, selectMachineMessages, selectMaterial, selectSetupMessages } from './store';
 import { parseProject, programToCsv, programToJson, serializeProject } from './project';
 import { fmt, fmtForce, kNToTonnes, parseNumberList } from './format';
 
@@ -188,6 +188,106 @@ describe('project store — planning', () => {
     store.getState().setFixedOrder(null);
     expect(store.getState().project.plannerOptions.fixedOrder).toBeUndefined();
     expect(store.getState().fixedOrder).toBeNull();
+  });
+
+  it('moveBendInOrder swaps the effective program order and persists it in the project', async () => {
+    const store = makeStore();
+    store.getState().loadFlat(loadTruth('box-4-flange').flat);
+    await store.getState().plan();
+    const auto = store.getState().project.program!.steps.map(step => step.bendId);
+    expect(auto).toHaveLength(4);
+
+    expect(store.getState().moveBendInOrder(auto[0]!, -1)).toBe(false);
+    expect(store.getState().moveBendInOrder(auto[3]!, 1)).toBe(false);
+    expect(store.getState().moveBendInOrder(auto[1]!, -1)).toBe(true);
+    expect(store.getState().fixedOrder).toEqual([auto[1], auto[0], auto[2], auto[3]]);
+    expect(store.getState().programStale).toBe(true);
+
+    await store.getState().plan();
+    const fixed = [auto[1], auto[0], auto[2], auto[3]];
+    expect(store.getState().project.program!.steps.map(step => step.bendId)).toEqual(fixed);
+    expect(store.getState().programStale).toBe(false);
+
+    const json = store.getState().saveProject();
+    const other = makeStore();
+    other.getState().loadProject(json);
+    expect(other.getState().fixedOrder).toEqual(fixed);
+    expect(other.getState().project.program!.steps.map(step => step.bendId)).toEqual(fixed);
+  });
+
+  it('reopens a fixed order as stale when its saved program still has the old order', async () => {
+    const store = makeStore();
+    store.getState().loadFlat(loadTruth('U-channel').flat);
+    await store.getState().plan();
+    const auto = store.getState().project.program!.steps.map(step => step.bendId);
+    store.getState().setFixedOrder([...auto].reverse());
+
+    const other = makeStore();
+    // Legacy/external files can contain a fixed order with an older program; load still detects it.
+    other.getState().loadProject(serializeProject(store.getState().project, store.getState().library));
+    expect(other.getState().fixedOrder).toEqual([...auto].reverse());
+    expect(other.getState().project.program!.steps.map(step => step.bendId)).toEqual(auto);
+    expect(other.getState().programStale).toBe(true);
+  });
+
+  it('does not serialize an obsolete fixed program after switching back to automatic order', async () => {
+    const store = makeStore();
+    store.getState().loadFlat(loadTruth('U-channel').flat);
+    await store.getState().plan();
+    const auto = store.getState().project.program!.steps.map(step => step.bendId);
+    store.getState().setFixedOrder([...auto].reverse());
+    await store.getState().plan();
+    expect(store.getState().project.program!.steps.map(step => step.bendId)).toEqual([...auto].reverse());
+
+    store.getState().setFixedOrder(null);
+    expect(store.getState().programStale).toBe(true);
+    const other = makeStore();
+    other.getState().loadProject(store.getState().saveProject());
+    expect(other.getState().fixedOrder).toBeNull();
+    expect(other.getState().project.program).toBeNull();
+    expect(other.getState().programStale).toBe(false);
+  });
+
+  it('keeps a skipped bend visible in the part but out of the operator sequence', () => {
+    const store = makeStore();
+    const flat = loadTruth('L-bracket').flat;
+    const skipped = { ...flat.bends[0]!, id: 'B99', p0: { x: 500, y: 500 }, p1: { x: 500, y: 550 } };
+    store.getState().loadFlat({ ...flat, bends: [...flat.bends, skipped] });
+    const s = store.getState();
+    expect(s.project.part!.flat.bends.map(bend => bend.id)).toContain('B99');
+    expect(s.project.part!.links.map(link => link.bendId)).not.toContain('B99');
+    expect(bendOrderIds(s.project, s.fixedOrder)).not.toContain('B99');
+    expect(store.getState().moveBendInOrder('B99', -1)).toBe(false);
+  });
+
+  it('does not offer planner-skipped linked bends as operator sequence steps', () => {
+    const store = makeStore();
+    const flat = loadTruth('U-channel').flat;
+    const tinyId = flat.bends[0]!.id;
+    store.getState().loadFlat({
+      ...flat,
+      bends: flat.bends.map((bend, index) => index === 0 ? { ...bend, angle: 0.005 } : bend),
+    });
+    const s = store.getState();
+    expect(s.project.part!.links.map(link => link.bendId)).toContain(tinyId);
+    expect(bendOrderIds(s.project, s.fixedOrder)).toEqual([flat.bends[1]!.id]);
+    expect(store.getState().moveBendInOrder(tinyId, 1)).toBe(false);
+  });
+
+  it('loads an all-skipped saved fixed order as automatic rather than an empty fixed state', () => {
+    const store = makeStore();
+    const flat = loadTruth('U-channel').flat;
+    const ids = flat.bends.map(bend => bend.id);
+    store.getState().loadFlat({
+      ...flat,
+      bends: flat.bends.map(bend => ({ ...bend, angle: 0.005 })),
+    });
+    store.getState().setFixedOrder(ids);
+
+    const other = makeStore();
+    other.getState().loadProject(store.getState().saveProject());
+    expect(other.getState().fixedOrder).toBeNull();
+    expect(other.getState().project.plannerOptions.fixedOrder).toBeUndefined();
   });
 
   it('plan() refuses without a part / stations and can be cancelled before it starts', async () => {

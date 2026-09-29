@@ -33,8 +33,8 @@ test('(b) L-bracket sample: one 90° bend, thickness 2, matched to the STEP mode
   await expect(page.getByTestId('part-recognized')).toContainText('Matched 1 of 1');
 
   // bend allowance column (BA = 4.52 for t2 ri2 k0.44 90°)
-  await expect(row.locator('td').nth(7)).toHaveText('4.52');
-  await expect(row.locator('td').nth(6)).toHaveText('80');
+  await expect(page.getByTestId('bend-allowance-B1')).toHaveText('4.52');
+  await expect(page.getByTestId('bend-length-B1')).toHaveText('80');
 
   await expect(page.getByTestId('sim-caption')).toBeVisible();   // idle preview of the part
   await shot(page, 'part-L-bracket');
@@ -61,7 +61,7 @@ test('(c) L-bracket DXF through the file input: outline imported, bend line pres
   await expect(page.getByTestId('bend-angle-B1')).toHaveValue('90');     // default angle, marked Default
   await expect(row).toContainText('Default');
   await expect(page.getByTestId('bend-dir-B1')).toContainText('Up');
-  await expect(row.locator('td').nth(6)).toHaveText('80');               // bend line spans the sheet
+  await expect(page.getByTestId('bend-length-B1')).toHaveText('80');    // bend line spans the sheet
   await expect(page.getByTestId('part-recognized')).toHaveCount(0);      // no 3D model this time
 
   // the flat view canvas is drawn (not blank)

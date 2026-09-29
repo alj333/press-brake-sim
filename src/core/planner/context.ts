@@ -33,6 +33,11 @@ export const HEM_PREBEND = 150;
 /** Bends are tracked in a 32-bit "done mask": more than this many tree links cannot be planned. */
 export const MAX_BENDS = 31;
 
+/** True when a linked bend can produce a real planner step. Keep operator ordering in sync with this gate. */
+export function isPlanEligibleBend(bend: BendLine): boolean {
+  return bend.angle >= STRAIGHT_ANGLE && Number.isFinite(vec2.dist(bend.p0, bend.p1));
+}
+
 export function defaultPlannerOptions(): PlannerOptions {
   return {
     sweepStepDeg: 5,
@@ -129,7 +134,7 @@ export function createContext(input: PlannerInput, signal?: AbortSignal): PlanCo
     const bend = bendById.get(link.bendId);
     if (!bend) continue;
     // a "bend" below the fold model's straight-zone threshold has no arc to form (bendPose would reject it)
-    if (!(bend.angle >= STRAIGHT_ANGLE) || !Number.isFinite(vec2.dist(bend.p0, bend.p1))) continue;
+    if (!isPlanEligibleBend(bend)) continue;
     const isHem = bend.angle >= 180 - 1e-9;
     bends.push({
       index: bends.length, id: bend.id, bend, link,

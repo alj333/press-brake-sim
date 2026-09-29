@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BendLine } from '../../core/types';
 import { SAMPLE_NAMES } from '../sampleNames';
 import { useI18n } from '../../i18n';
-import { useProjectStore } from '../store';
+import { bendOrderIds, useProjectStore } from '../store';
 import { FileDrop } from '../components/FileDrop';
 import { FlatView } from '../components/FlatView';
 import { MessageList } from '../components/MessageList';
@@ -33,6 +33,8 @@ export function PartPanel() {
   const mesh = useProjectStore(s => s.mesh);
   const dxfUnits = useProjectStore(s => s.dxfUnits);
   const meshUnits = useProjectStore(s => s.meshUnits);
+  const planning = useProjectStore(s => s.planning);
+  const fixedOrder = useProjectStore(s => s.fixedOrder);
   const selectedBendId = useProjectStore(s => s.selectedBendId);
   const actions = useProjectStore.getState();
   const [addMode, setAddMode] = useState(false);
@@ -54,6 +56,28 @@ export function PartPanel() {
     const w = part.flatBounds.max.x - part.flatBounds.min.x, h = part.flatBounds.max.y - part.flatBounds.min.y;
     return { flanges: part.flanges.length, bends: part.flat.bends.length, holes: part.flat.holes.length, w: fmt(w, 1), h: fmt(h, 1) };
   }, [part]);
+  const orderedBends = useMemo(() => {
+    if (!flat) return [];
+    const byId = new Map(flat.bends.map(b => [b.id, b]));
+    const order = bendOrderIds(project, fixedOrder);
+    const orderSet = new Set(order);
+    const bendable = order.flatMap(id => {
+      const bend = byId.get(id);
+      return bend ? [bend] : [];
+    });
+    return [...bendable, ...flat.bends.filter(b => !orderSet.has(b.id))];
+  }, [flat, fixedOrder, project]);
+  const bendOrder = useMemo(() => bendOrderIds(project, fixedOrder), [fixedOrder, project]);
+  const showOrderControls = bendOrder.length > 1;
+
+  const moveBend = (id: string, offset: -1 | 1): void => {
+    if (actions.moveBendInOrder(id, offset)) void actions.plan();
+  };
+
+  const restoreAutoOrder = (): void => {
+    actions.setFixedOrder(null);
+    void actions.plan();
+  };
 
   return (
     <div className="panel part-panel">
@@ -157,30 +181,89 @@ export function PartPanel() {
       </section>
 
       <section className="panel-section">
-        <h3 className="section-title">{t('part.bends')}</h3>
+        <div className="row row-between row-wrap">
+          <h3 className="section-title">{t('part.bends')}</h3>
+          {showOrderControls && (
+            <div className="row row-wrap bend-order-status" aria-live="polite" aria-busy={planning}>
+              <span
+                className={fixedOrder ? 'badge badge-user' : 'badge'}
+                data-testid="bend-order-status"
+                title={fixedOrder ? bendOrder.join(' → ') : undefined}
+                aria-label={fixedOrder ? `${t('part.bend.orderFixed')}: ${bendOrder.join(' → ')}` : t('part.bend.orderAuto')}
+              >
+                {fixedOrder
+                  ? t('part.bend.orderFixed')
+                  : t('part.bend.orderAuto')}
+              </span>
+              {planning && <span className="small muted busy" data-testid="bend-order-planning">{t('part.bend.replanning')}</span>}
+              {fixedOrder && (
+                <button
+                  type="button"
+                  className="btn btn-small bend-order-auto-button"
+                  disabled={planning}
+                  data-testid="bend-order-auto"
+                  onClick={restoreAutoOrder}
+                >
+                  {t('part.bend.useAutoOrder')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         {!flat && <p className="muted">{t('part.noPart')}</p>}
         {flat && flat.bends.length === 0 && <p className="muted">{t('part.noBends')}</p>}
         {flat && flat.bends.length > 0 && (
-          <div className="table-wrap">
-            <table className="table bends-table" data-testid="bends-table">
-              <thead>
-                <tr>
-                  <th>{t('part.bend.id')}</th>
-                  <th>{t('part.bend.direction')}</th>
-                  <th>{t('part.bend.angle')}</th>
-                  <th>{t('part.bend.innerRadius')}</th>
-                  <th>{t('part.bend.kFactor')}</th>
-                  <th>{t('part.bend.correction')}</th>
-                  <th>{t('part.bend.length')}</th>
-                  <th>{t('part.bend.allowance')}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {flat.bends.map(b => {
+          <>
+            {showOrderControls && <p className="small muted bend-order-hint">{t('part.bend.orderHint')}</p>}
+            <div className="table-wrap">
+              <table className="table bends-table" data-testid="bends-table">
+                <thead>
+                  <tr>
+                    {showOrderControls && <th>{t('part.bend.order')}</th>}
+                    <th>{t('part.bend.id')}</th>
+                    <th>{t('part.bend.direction')}</th>
+                    <th>{t('part.bend.angle')}</th>
+                    <th>{t('part.bend.innerRadius')}</th>
+                    <th>{t('part.bend.kFactor')}</th>
+                    <th>{t('part.bend.correction')}</th>
+                    <th>{t('part.bend.length')}</th>
+                    <th>{t('part.bend.allowance')}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderedBends.map(b => {
                   const selected = b.id === selectedBendId;
+                  const orderIndex = bendOrder.indexOf(b.id);
                   return (
                     <tr key={b.id} data-testid={`bend-row-${b.id}`} className={selected ? 'row-selected' : undefined} onClick={() => actions.selectBend(b.id)}>
+                      {showOrderControls && <td className="bend-order-cell">
+                        <span className="bend-order-number" data-testid={`bend-order-index-${b.id}`}>{orderIndex >= 0 ? orderIndex + 1 : '—'}</span>
+                        <span className="bend-order-buttons">
+                          <button
+                            type="button"
+                            className="btn btn-small bend-order-button"
+                            disabled={planning || orderIndex <= 0}
+                            title={t('part.bend.moveEarlier', { id: b.id })}
+                            aria-label={t('part.bend.moveEarlier', { id: b.id })}
+                            data-testid={`bend-order-earlier-${b.id}`}
+                            onClick={e => { e.stopPropagation(); moveBend(b.id, -1); }}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-small bend-order-button"
+                            disabled={planning || orderIndex < 0 || orderIndex === bendOrder.length - 1}
+                            title={t('part.bend.moveLater', { id: b.id })}
+                            aria-label={t('part.bend.moveLater', { id: b.id })}
+                            data-testid={`bend-order-later-${b.id}`}
+                            onClick={e => { e.stopPropagation(); moveBend(b.id, 1); }}
+                          >
+                            ▼
+                          </button>
+                        </span>
+                      </td>}
                       <td className="cell-id">
                         <strong>{b.id}</strong> <SourceBadge source={b.sources.geometry} />
                         {b.hem && <span className="badge badge-hem" title={t(`part.bend.hem.${b.hem}`)}>{t('part.bend.hem')}</span>}
@@ -207,17 +290,18 @@ export function PartPanel() {
                       </td>
                       <td><NumberField value={b.kFactor} onCommit={v => actions.setBend(b.id, { kFactor: v })} min={0.05} max={1} step={0.01} digits={3} testId={`bend-k-${b.id}`} size={4} /></td>
                       <td><NumberField value={b.angleCorrection ?? 0} onCommit={v => actions.setBend(b.id, { angleCorrection: v })} min={-45} max={45} step={0.5} digits={2} testId={`bend-corr-${b.id}`} size={4} /></td>
-                      <td className="num-cell">{fmt(bendLength(b), 1)}</td>
-                      <td className="num-cell">{fmt(part?.bendAllowance[b.id], 2)}</td>
+                      <td className="num-cell" data-testid={`bend-length-${b.id}`}>{fmt(bendLength(b), 1)}</td>
+                      <td className="num-cell" data-testid={`bend-allowance-${b.id}`}>{fmt(part?.bendAllowance[b.id], 2)}</td>
                       <td>
                         <button type="button" className="btn btn-ghost btn-small" title={t('part.bend.delete')} aria-label={t('part.bend.delete')} data-testid={`bend-delete-${b.id}`} onClick={e => { e.stopPropagation(); actions.removeBend(b.id); }}>✕</button>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </div>

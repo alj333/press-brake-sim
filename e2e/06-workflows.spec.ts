@@ -59,7 +59,7 @@ test('editing a bend clears the program; the re-plan follows the new angle', asy
   await expect(page.getByTestId('steps')).toHaveCount(0);                  // program cleared
   await expect(page.getByTestId('sim-play')).toBeDisabled();
   // the flat view label follows the edit
-  await expect(page.getByTestId('bend-row-B1').locator('td').nth(7)).not.toHaveText('4.52');
+  await expect(page.getByTestId('bend-allowance-B1')).not.toHaveText('4.52');
 
   await plan(page, 1);
   await expect(page.getByTestId('step-angle-0')).toContainText('60°');    // included = 180 − 120
@@ -91,6 +91,34 @@ test('drag-reordering the steps fixes the order and Auto restores it', async ({ 
   await expect(page.getByTestId('plan-progress')).toBeHidden({ timeout: 120_000 });
   await expect(page.getByTestId('order-auto')).toHaveCount(0);
   for (let i = 0; i < 4; i++) await expect(page.getByTestId(`step-${i}`)).toHaveAttribute('data-bend-id', before[i]!);
+  errors.assertClean();
+});
+
+test('BENDS table arrows quickly reorder the real program and restore Auto', async ({ page }) => {
+  const errors = collectErrors(page);
+  await openApp(page);
+  await loadSample(page, 'box-4-flange');
+  await plan(page, 4);
+  const before: string[] = [];
+  for (let i = 0; i < 4; i++) before.push((await page.getByTestId(`step-${i}`).getAttribute('data-bend-id')) ?? '');
+
+  await page.getByTestId('tab-part').click();
+  const rows = page.getByTestId('bends-table').locator('tbody tr');
+  await expect(rows.nth(0)).toHaveAttribute('data-testid', `bend-row-${before[0]}`);
+  await expect(page.getByTestId(`bend-order-earlier-${before[0]}`)).toBeDisabled();
+  await page.getByTestId(`bend-order-earlier-${before[1]}`).click();
+
+  await expect(page.getByTestId('bend-order-status')).toContainText('Fixed');
+  await expect(rows.nth(0)).toHaveAttribute('data-testid', `bend-row-${before[1]}`);
+  await expect(page.getByTestId(`bend-order-index-${before[1]}`)).toHaveText('1');
+  await expect(page.getByTestId('step-0')).toHaveAttribute('data-bend-id', before[1]!, { timeout: 120_000 });
+  await expect(page.getByTestId('step-1')).toHaveAttribute('data-bend-id', before[0]!);
+  await expect(page.getByTestId('program-stale')).toHaveCount(0);
+
+  await page.getByTestId('bend-order-auto').click();
+  await expect(page.getByTestId('bend-order-status')).toHaveText('Automatic order');
+  await expect(page.getByTestId('step-0')).toHaveAttribute('data-bend-id', before[0]!, { timeout: 120_000 });
+  await expect(rows.nth(0)).toHaveAttribute('data-testid', `bend-row-${before[0]}`);
   errors.assertClean();
 });
 
