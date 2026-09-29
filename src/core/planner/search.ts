@@ -11,6 +11,15 @@ import type { Evaluation, Evaluator, GaugedSide } from './evaluate';
 
 export const BEAM_WIDTH = 40;
 export const EXHAUSTIVE_MAX_BENDS = 7;
+/** Legs whose outside dimensions differ by no more than this remain equivalent for handling. */
+export const GAUGED_LEG_TOLERANCE = 0.5;
+
+const SIGNIFICANT_GAUGE_WARNINGS = new Set([
+  'warnings.gauge.radiusContact',
+  'warnings.gauge.contactNotStraight',
+  'warnings.gauge.noContact',
+  'warnings.gauge.singleFinger',
+]);
 
 export interface SequenceStep {
   evaluation: Evaluation;
@@ -50,6 +59,41 @@ function stepFrom(ctx: PlanContext, prev: Evaluation | null, ev: Evaluation, pos
   return { evaluation: ev, turn, stationChange, stepCost };
 }
 
+/**
+ * Safety/quality gate for choosing which adjacent leg faces the backgauge. The informational
+ * finger-over-die message is deliberately excluded: R=0 is a validated way to reach a short leg.
+ */
+function sideQuality(ev: Evaluation): [hardErrors: number, warningCollisions: number, gaugeWarnings: number] {
+  return [
+    ev.hardErrors,
+    ev.sweep.collisions.filter(c => c.severity === 'warning').length,
+    ev.backgauge.warnings.filter(w => SIGNIFICANT_GAUGE_WARNINGS.has(w.key)).length,
+  ];
+}
+
+function compareQuality(a: Evaluation, b: Evaluation): number {
+  const qa = sideQuality(a), qb = sideQuality(b);
+  for (let i = 0; i < qa.length; i++) {
+    const d = qa[i]! - qb[i]!;
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+function gaugedOutside(ev: Evaluation): number {
+  return ev.gaugedSide === 1 ? ev.legs.child.outside : ev.legs.parent.outside;
+}
+
+/** Select the safe/usable gauged side(s), applying the short-leg convention only on a quality tie. */
+export function preferredSideEvaluations(a: Evaluation, b: Evaluation): Evaluation[] {
+  const quality = compareQuality(a, b);
+  if (quality < 0) return [a];
+  if (quality > 0) return [b];
+  const aOutside = gaugedOutside(a), bOutside = gaugedOutside(b);
+  if (!Number.isFinite(aOutside) || !Number.isFinite(bOutside) || Math.abs(aOutside - bOutside) <= GAUGED_LEG_TOLERANCE) return [a, b];
+  return [aOutside < bOutside ? a : b];
+}
+
 /** Total cost of a complete sequence of evaluations (the quantity the search minimises). */
 export function sequenceCost(ctx: PlanContext, evaluations: Evaluation[]): number {
   const maxDepth = ctx.bends.reduce((m, b) => Math.max(m, b.depth), 1);
@@ -64,8 +108,9 @@ function candidatesFor(ctx: PlanContext, ev: Evaluator, bendIndex: number, doneM
   const out: SequenceStep[] = [];
   for (const st of ctx.stations) {
     if (st.isHemming) continue;
-    for (const side of [0, 1] as GaugedSide[]) {
-      out.push(stepFrom(ctx, prev, ev.evaluate(bendIndex, doneMask, side, st.index), position, maxDepth));
+    const sides = ([0, 1] as GaugedSide[]).map(side => ev.evaluate(bendIndex, doneMask, side, st.index));
+    for (const choice of preferredSideEvaluations(sides[0]!, sides[1]!)) {
+      out.push(stepFrom(ctx, prev, choice, position, maxDepth));
     }
   }
   out.sort((a, b) => a.stepCost - b.stepCost);

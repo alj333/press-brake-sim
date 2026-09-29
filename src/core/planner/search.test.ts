@@ -53,7 +53,7 @@ describe('search modes', () => {
   });
 });
 
-import { createContext, createEvaluator, searchSequence, sequenceCost } from './index';
+import { createContext, createEvaluator, preferredSideEvaluations, searchSequence, sequenceCost } from './index';
 import type { Evaluation } from './index';
 
 describe('exhaustive search optimality', () => {
@@ -69,8 +69,15 @@ describe('exhaustive search optimality', () => {
       for (const order of perms([...Array(n).keys()])) {
         for (let sides = 0; sides < 1 << n; sides++) {
           const evs: Evaluation[] = [];
-          let mask = 0;
-          order.forEach((bi, k) => { evs.push(ev.evaluate(bi, mask, ((sides >> k) & 1) as 0 | 1, 0)); mask |= 1 << bi; });
+          let mask = 0, allowed = true;
+          order.forEach((bi, k) => {
+            const e0 = ev.evaluate(bi, mask, 0, 0), e1 = ev.evaluate(bi, mask, 1, 0);
+            const choice = ((sides >> k) & 1) === 0 ? e0 : e1;
+            if (!preferredSideEvaluations(e0, e1).includes(choice)) allowed = false;
+            evs.push(choice);
+            mask |= 1 << bi;
+          });
+          if (!allowed) continue;
           best = Math.min(best, sequenceCost(ctx, evs));
         }
       }

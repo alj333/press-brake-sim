@@ -193,11 +193,18 @@ minLeg}`) → force vs capacity (`warnings.machine.capacity {force, capacity, pe
 > 100 %, warning > 90 %) and tool ratings (`toolLoadCheck` messages). Order-independent cost:
 
 `cost = shortFlange·(legWarnings + 2·legErrors) + collisionWarning·(warning collisions) +
-vPreference + 0.5·bottoming + gaugeQuality + 0.05·(1 − gaugedArea/partArea) + 0.2·(flanges
-already bent that point below the die plane) + 1e6·hardErrors`, with `gaugeQuality` =
+vPreference + 0.5·bottoming + gaugeQuality + 0.2·(flanges already bent that point below the
+die plane) + 1e6·hardErrors`, with `gaugeQuality` =
 `GAUGE_WARNING_COST` (1) per radius / not-straight / no-contact gauge, `FINGER_OVER_DIE_COST`
-(0.75) for a finger skimming the die top and `SINGLE_FINGER_COST` (0.5) for a single-finger gauge
-— a clean two-finger cut-edge or wall-face contact wins when everything else is equal.
+(0.75) for a finger skimming the die top and `SINGLE_FINGER_COST` (0.5) for a single-finger gauge.
+
+For each bend/state/station, the two gauged-side candidates pass through a side gate before
+sequence/manipulation scoring: compare hard errors, then warning collisions, then significant
+gauge warnings (radius, not-straight, no-contact, single-finger). The better side wins. When those
+are tied, the adjacent leg with the smaller outside dimension faces the backgauge; legs within
+0.5 mm remain equivalent. The legitimate informational `fingerOverDie` condition does not reverse
+the short-side convention. A real safety or gauge-quality problem can therefore select the longer
+side, while flip/rotation optimisation cannot silently turn a safe short flange toward the operator.
 
 Hard errors: error collisions, angle not fitting, station too short, a leg below `minLeg` (it
 slips off the shoulder before the loaded angle — the search then moves to a narrower mounted V),

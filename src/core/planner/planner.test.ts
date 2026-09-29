@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mat4 } from '../geom';
-import { buildPartModel, foldGeometry, flatState, bendPose } from '../part';
+import { buildPartModel, foldGeometry, flatState, bendPose, partBoundsFolded, partSilhouette } from '../part';
 import { punchTipY } from '../bend';
 import { vDie } from '../tools';
 import { planProgram, defaultPlannerOptions, buildTimeline } from './index';
@@ -17,7 +17,7 @@ const flips = (p: BendProgram): number => p.steps.filter(s => s.manipulation.tur
 const errorCollisions = (p: BendProgram) => p.steps.flatMap(s => s.collisions.filter(c => c.severity === 'error'));
 
 describe('planProgram — samples', () => {
-  it('L-bracket: one feasible step, long leg gauged on the cut edge, goldens reproduced', () => {
+  it('L-bracket: one feasible step with the short leg rearward on the backgauge and the long leg toward the operator', () => {
     const s = sampleSetup('L-bracket');
     const p = planProgram(inputOf(s));
     expect(p.feasible).toBe(true);
@@ -27,10 +27,11 @@ describe('planProgram — samples', () => {
     expect(st.kind).toBe('bend');
     expect(st.gaugeContact).toBe('cut-edge');
     expect(st.backgauge.length).toBe(2);
-    const longLegGauged = st.placement.gaugedFlangeId === s.part.rootFlangeId;
-    const expectedX = longLegGauged ? 58.26 : 38.26;
+    const link = s.part.links.find(l => l.bendId === 'B1')!;
+    expect(st.placement.gaugedFlangeId).toBe(link.childFlangeId);
+    expect(st.placement.frontFlangeId).toBe(link.parentFlangeId);
     for (const f of st.backgauge) {
-      expect(Math.abs(f.x - expectedX)).toBeLessThan(0.1);
+      expect(Math.abs(f.x - 38.26)).toBeLessThan(0.1);
       expect(f.r).toBeCloseTo(-(20 - s.truth.thickness) / 2, 6);
     }
     expect(Math.abs(st.ramDepth - g.ramDepthSharpShoulder)).toBeLessThan(0.3);
@@ -41,8 +42,23 @@ describe('planProgram — samples', () => {
     expect(st.actualInnerRadius).toBeCloseTo(g.actualInnerRadius, 2);
     expect(st.bendDeduction).toBeCloseTo(g.bendDeduction, 1);
     expect(st.dimensionRef).toBe('virtual-sharp');
-    // outside dimension of the gauged leg (60 for the root, 40 for the child)
-    expect(st.gaugedFlangeOutside).toBeCloseTo(longLegGauged ? 60 : 40, 1);
+    expect(st.gaugedFlangeOutside).toBeCloseTo(40, 1);
+    const flatPieces = partSilhouette(foldGeometry(s.part, flatState(s.part)), st.placement.transform, s.truth.thickness);
+    const xs = flatPieces.flatMap(piece => piece.polygon.map(point => point.x));
+    const rearDepth = Math.max(...xs);
+    const frontDepth = -Math.min(...xs);
+    expect(rearDepth).toBeCloseTo(38.26, 1);
+    expect(frontDepth).toBeCloseTo(58.26, 1);
+    expect(frontDepth).toBeGreaterThan(rearDepth);
+    const approach = buildTimeline(p, s.part, s.material, s.machine, s.library)
+      .find(frame => frame.stepIndex === 0 && frame.phase === 'approach')!;
+    const approachBounds = partBoundsFolded(
+      foldGeometry(s.part, approach.foldState),
+      s.truth.thickness,
+      approach.partTransform,
+    );
+    expect(approachBounds.min.x).toBeCloseTo(-58.26, 1);
+    expect(approachBounds.max.x).toBeCloseTo(38.26, 1);
     expect(st.punchLength).toBe(3100);
     expect(st.segments).toEqual(s.setup.stations[0]!.segments);
     expect(st.pinchY).toBeCloseTo(120 + 2, 6);
@@ -54,6 +70,17 @@ describe('planProgram — samples', () => {
     expect(p.maxForce).toBeCloseTo(st.force, 6);
     expect(p.stats.timeMs).toBeGreaterThanOrEqual(0);
     expect(p.warnings.filter(w => w.severity === 'error')).toEqual([]);
+  });
+
+  it('falls back to the longer leg when the short-leg gauge position is outside the machine range', () => {
+    const s = sampleSetup('L-bracket');
+    const machine = { ...s.machine, backgauge: { ...s.machine.backgauge, xMin: 50 } };
+    const p = planProgram({ ...inputOf(s), machine });
+    const st = p.steps[0]!;
+    expect(p.feasible).toBe(true);
+    expect(st.placement.gaugedFlangeId).toBe(s.part.rootFlangeId);
+    expect(st.backgauge[0]!.x).toBeCloseTo(58.26, 1);
+    expect(st.warnings.filter(w => w.severity === 'error')).toEqual([]);
   });
 
   it('U-channel: two steps, no flips, second step gauges on the standing wall face or the free cut edge', () => {
@@ -113,6 +140,12 @@ describe('planProgram — samples', () => {
     expect(p.feasible).toBe(true);
     expect(p.steps.length).toBe(4);
     expect(errorCollisions(p)).toEqual([]);
+    const first = p.steps[0]!;
+    const firstLink = s.part.links.find(l => l.bendId === first.bendId)!;
+    expect(first.placement.gaugedFlangeId).toBe(firstLink.childFlangeId);
+    expect(first.placement.frontFlangeId).toBe(firstLink.parentFlangeId);
+    expect(first.gaugedFlangeOutside).toBeCloseTo(30, 1);
+    expect(first.backgauge[0]!.x).toBeCloseTo(28.26, 1);
     expect(flips(p)).toBe(s.truth.expected.expectedFlips ?? 0);
     for (const st of p.steps.slice(2)) {
       expect(st.punchLength).toBeLessThan(192);

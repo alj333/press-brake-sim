@@ -80,6 +80,10 @@ test('(e) box-4-flange: 4 feasible steps, playback advances, phases step through
   await plan(page, 4);
 
   await expect(page.getByTestId('program-feasible')).toHaveText('Feasible');
+  await expect(page.getByTestId('step-0')).toHaveAttribute('data-front-flange', 'F1');
+  await expect(page.getByTestId('step-0')).toHaveAttribute('data-gauged-flange', /F[2-5]/);
+  const firstGaugeX = Number(await page.getByTestId('step-finger-0-0').getAttribute('data-x'));
+  expect(firstGaugeX, 'short outer flange is on the rear backgauge').toBeCloseTo(28.26, 1);
   for (let i = 0; i < 4; i++) {
     await expect(page.getByTestId(`step-${i}`)).toHaveAttribute('data-errors', '0');
     await expect(page.getByTestId(`step-collisions-${i}`)).toHaveCount(0);

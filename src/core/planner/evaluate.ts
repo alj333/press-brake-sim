@@ -18,8 +18,6 @@ import type { SweepResult } from './collision';
 
 /** Cost added per hard error (an infeasible step is never preferred to a feasible one). */
 export const HARD_ERROR_COST = 1e6;
-/** Tie-breaker weights (all far below the primary weights). */
-export const PREFER_LARGER_GAUGED = 0.05;
 export const STANDING_DOWN_COST = 0.2;
 export const BOTTOMING_COST = 0.5;
 /** Gauge quality: a radius / non-straight / missing contact, a finger skimming the die top, a single-finger gauge. */
@@ -70,8 +68,6 @@ export function createEvaluator(ctx: PlanContext, onEvaluate?: (count: number) =
   const mathsMemo = new Map<string, BendStationMaths>();
   let count = 0;
   const w = ctx.options.weights;
-  const partArea = ctx.part.flanges.reduce((s, f) => s + f.area, 0) || 1;
-
   const maths = (bendIndex: number, stationIndex: number): BendStationMaths => {
     const key = `${bendIndex}:${stationIndex}`;
     let m = mathsMemo.get(key);
@@ -148,7 +144,6 @@ export function createEvaluator(ctx: PlanContext, onEvaluate?: (count: number) =
     }
     const standingDown = down.size;
 
-    const gaugedArea = ctx.part.flanges.find(f => f.id === gaugedId)?.area ?? 0;
     let gaugeQuality = 0;
     for (const msg of backgauge.warnings) {
       if (GAUGE_WARNING_KEYS.has(msg.key)) gaugeQuality += GAUGE_WARNING_COST;
@@ -161,7 +156,6 @@ export function createEvaluator(ctx: PlanContext, onEvaluate?: (count: number) =
       m.vPreference +
       (m.angleOk ? 0 : BOTTOMING_COST) +
       gaugeQuality +
-      PREFER_LARGER_GAUGED * (1 - gaugedArea / partArea) +
       STANDING_DOWN_COST * standingDown +
       HARD_ERROR_COST * hardErrors;
 

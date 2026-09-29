@@ -165,7 +165,7 @@ describe('review — turns, legs and gauge costs', () => {
     const p = plan(flat);
     expect(p.feasible).toBe(false);
     expect(p.steps[0]!.warnings.some(w => w.key === 'warnings.bend.legTooShort' && w.severity === 'error')).toBe(true);
-    expect(p.steps[0]!.gaugedFlangeOutside).toBeGreaterThan(100);   // the long leg is gauged, the short one still fails
+    expect(p.steps[0]!.gaugedFlangeOutside).toBeCloseTo(13.74, 1); // the short leg is gauged, but still fails Lmin safely
     const two: ToolSetup = {
       machineId: machine.id,
       stations: [
@@ -199,13 +199,13 @@ describe('review — turns, legs and gauge costs', () => {
     expect(s2.gaugedFlangeOutside).toBeCloseTo(s2.backgauge[0]!.x - s.part.bendAllowance['B1']! / 2 + 4, 2);   // step numbers are rounded to 0.01
   });
 
-  it('a finger skimming the die top to reach a short leg is reported (info) and costed: the tabbed plate gauges the plate', () => {
+  it('a finger skimming the die top to reach a short leg is reported (info) and costed without overruling the short-side preference', () => {
     const s = sampleSetup('tabbed-plate');
     const p = planProgram({ part: s.part, material: s.material, machine: s.machine, setup: s.setup, library: s.library });
     const st = p.steps[0]!;
-    expect(st.placement.gaugedFlangeId).toBe(s.part.rootFlangeId);
-    expect(Math.abs(st.backgauge[0]!.x - 118)).toBeLessThan(0.1);
-    expect(st.warnings.some(w => w.key === 'warnings.gauge.fingerOverDie')).toBe(false);
+    expect(st.placement.gaugedFlangeId).not.toBe(s.part.rootFlangeId);
+    expect(Math.abs(st.backgauge[0]!.x - 23.26)).toBeLessThan(0.1);
+    expect(st.warnings.some(w => w.key === 'warnings.gauge.fingerOverDie' && w.severity === 'info')).toBe(true);
     // the box gauges its 30 mm walls with the fingers raised onto the die top (R = 0) rather than turning the part
     const b = sampleSetup('box-4-flange');
     const q = planProgram({ part: b.part, material: b.material, machine: b.machine, setup: b.setup, library: b.library });
@@ -258,7 +258,8 @@ describe('review — tool orientation and invariances', () => {
     expect(b.feasible).toBe(true);
     const down = plan(strip('udown', [{ u: 38.26, direction: 'down' }, { u: 114.79, direction: 'down' }], 153.05, 120));
     expect(down.feasible).toBe(true);
-    expect(down.steps.every(st => st.placement.flipped && st.manipulation.turn === 'none')).toBe(true);
+    expect(down.steps.every(st => st.placement.flipped)).toBe(true);
+    expect(down.steps.map(st => st.manipulation.turn)).toEqual(['none', 'rotate180']);
     expect(down.steps.flatMap(st => st.collisions)).toEqual([]);
   });
 

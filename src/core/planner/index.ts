@@ -12,7 +12,7 @@ export { sweepCollisions, obstaclesAt, cutBox, overlapLocation, poseAtFraction, 
 export type { SweepRequest, SweepResult } from './collision';
 export { createEvaluator, HARD_ERROR_COST, GAUGE_WARNING_COST, FINGER_OVER_DIE_COST, SINGLE_FINGER_COST } from './evaluate';
 export type { Evaluation, Evaluator, GaugedSide, LegInfo } from './evaluate';
-export { searchSequence, sequenceCost, manipulationCost, BEAM_WIDTH, EXHAUSTIVE_MAX_BENDS } from './search';
+export { searchSequence, sequenceCost, manipulationCost, preferredSideEvaluations, BEAM_WIDTH, EXHAUSTIVE_MAX_BENDS, GAUGED_LEG_TOLERANCE } from './search';
 export type { SearchResult, SequenceStep } from './search';
 export { buildTimeline, KEYFRAMES_PER_PHASE, PARK_OFFSET, parkOffsetFor, HANDLING_SPEED, TURN_TIME_S, GAUGE_APPROACH, RELEASE_RISE } from './timeline';
 export { recommendSetups } from './recommend';

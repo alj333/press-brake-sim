@@ -29,6 +29,8 @@ function StepCard({ step, selected, dragging, onSelect, onDragStart, onDragOver,
       className={cls}
       data-testid={`step-${step.index}`}
       data-bend-id={step.bendId}
+      data-gauged-flange={step.placement.gaugedFlangeId}
+      data-front-flange={step.placement.frontFlangeId}
       data-turn={step.manipulation.turn}
       data-errors={errors}
       data-feasible-collisions={errors === 0 ? 'true' : 'false'}
