@@ -119,6 +119,7 @@ describe('dictionary completeness', () => {
     for (const p of ['evaluate', 'search', 'assemble']) need.push(`sequence.phase.${p}`);
     for (const f of ['straight', 'gooseneck', 'acute', 'radius', 'hemming', 'custom', 'v', 'multi-v', 'u']) need.push(`family.${f}`);
     for (const k of ['punch', 'die', 'finger']) need.push(`tools.kind.${k}`, `tools.dialog.hint.${k}`);
+    for (const s of ['in-stock', 'not-in-stock']) need.push(`tools.stock.${s}`);
     for (const d of ['y+', 'y-', 'x+', 'x-']) need.push(`tools.dialog.upDir.${d}`);
     for (const t of ['none', 'rotate180', 'flip-front-back', 'flip-end-for-end']) need.push(`turn.${t}`);
     for (const c of ['cut-edge', 'flange-face', 'radius', 'none']) need.push(`contact.${c}`);

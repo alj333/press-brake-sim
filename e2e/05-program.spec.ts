@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { SHOT_DIR, collectErrors, loadSample, openApp, plan, shot } from './helpers.ts';
+import { SHOT_DIR, collectErrors, loadSample, openApp, plan, selectReferenceTooling, shot } from './helpers.ts';
 
 test('(i) export JSON / CSV download the program and the print view renders', async ({ page }) => {
   const errors = collectErrors(page);
@@ -19,6 +19,7 @@ test('(i) export JSON / CSV download the program and the print view renders', as
   });
   await openApp(page);
   await loadSample(page, 'Z-bracket');
+  await selectReferenceTooling(page);
   await plan(page, 2);
 
   await page.getByTestId('tab-program').click();

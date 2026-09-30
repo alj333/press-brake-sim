@@ -12,6 +12,14 @@ export const ROOT = resolve(import.meta.dirname, '..');
 export const SHOT_DIR = resolve(ROOT, 'scratch/e2e');
 export const SAMPLES_DIR = resolve(ROOT, 'samples');
 
+/**
+ * Historical golden workflows were recorded against the original generic 88° tools mounted
+ * across the full 3100 mm reference bed. Production now defaults to the finite MotionX tooling,
+ * so those geometry-specific workflows opt into the old reference fixture explicitly.
+ */
+export const REFERENCE_PUNCH_ID = 'std:punch-straight-88-r0.8';
+export const REFERENCE_DIE_ID = 'std:die-v16-88';
+
 /** Sample bend ids (B1…Bn) as the DXF flats name them. */
 export const SAMPLE_BENDS: Record<string, number> = {
   'L-bracket': 1, 'U-channel': 2, 'Z-bracket': 2, 'hat-channel': 4, 'acute-bracket': 1, 'box-4-flange': 4, 'tabbed-plate': 1,
@@ -77,6 +85,29 @@ export async function loadSample(page: Page, name: keyof typeof SAMPLE_BENDS): P
   // the STEP recognition finishes after the DXF: wait for the "recognised" line so the bends carry STEP sources
   await expect(page.getByTestId('part-recognized')).toBeVisible({ timeout: 90_000 });
   await expect(page.getByTestId('part-importing')).toBeHidden({ timeout: 90_000 });
+}
+
+/** Mounts the original generic reference tools and restores their full-bed station geometry. */
+export async function selectReferenceTooling(page: Page): Promise<void> {
+  await page.getByTestId('tab-tools').click();
+  const punch = page.getByTestId('station-punch-S1');
+  const die = page.getByTestId('station-die-S1');
+  await punch.selectOption(REFERENCE_PUNCH_ID);
+  await die.selectOption(REFERENCE_DIE_ID);
+  await expect(punch).toHaveValue(REFERENCE_PUNCH_ID);
+  await expect(die).toHaveValue(REFERENCE_DIE_ID);
+
+  const zStart = page.getByTestId('station-zstart-S1');
+  const zEnd = page.getByTestId('station-zend-S1');
+  await zStart.fill('0');
+  await zStart.press('Enter');
+  await zEnd.fill('3100');
+  await zEnd.press('Enter');
+  await expect(zStart).toHaveValue('0');
+  await expect(zEnd).toHaveValue('3100');
+  // Match loadSample's caller-facing state: the historical workflows continue from the Part tab.
+  await page.getByTestId('tab-part').click();
+  await expect(page.getByTestId('tab-part')).toHaveClass(/tab-active/);
 }
 
 /** Clicks Plan and waits for the program (all `steps` step cards) to appear. */

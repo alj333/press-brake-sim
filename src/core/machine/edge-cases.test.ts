@@ -14,13 +14,18 @@ import { machineObstacles, FRAME_THICKNESS } from './obstacles';
 import type { Machine, ToolSetup, ToolStation } from '../types';
 
 const lib = buildStandardLibrary();
+const availableLib = {
+  ...lib,
+  punches: lib.punches.map(punch => ({ ...punch, stockStatus: 'in-stock' as const })),
+  dies: lib.dies.map(die => ({ ...die, stockStatus: 'in-stock' as const })),
+};
 const m = defaultMachine();
 
 function station(over: Partial<ToolStation> = {}): ToolStation {
   return { id: 'S1', punchId: 'std:punch-straight-88-r0.8', dieId: 'std:die-v16-88', zStart: 0, zEnd: 835, segments: [835], punchFlipped: false, dieFlipped: false, ...over };
 }
 function setupOf(...stations: ToolStation[]): ToolSetup { return { machineId: m.id, stations }; }
-const keys = (setup: ToolSetup, machine: Machine = m) => validateSetup(setup, machine, lib).map(x => x.key);
+const keys = (setup: ToolSetup, machine: Machine = m) => validateSetup(setup, machine, availableLib).map(x => x.key);
 
 describe('validateSetup — overlaps and ranges', () => {
   it('a station enclosing two others is reported against each of them', () => {
@@ -43,7 +48,7 @@ describe('validateSetup — overlaps and ranges', () => {
   });
 
   it('both tools unknown → two unknownTool errors, no stack/segment checks', () => {
-    const msgs = validateSetup(setupOf(station({ punchId: 'x', dieId: 'y' })), m, lib);
+    const msgs = validateSetup(setupOf(station({ punchId: 'x', dieId: 'y' })), m, availableLib);
     expect(msgs.filter(x => x.key === 'warnings.setup.unknownTool')).toHaveLength(2);
     expect(msgs.every(x => x.severity === 'error')).toBe(true);
   });

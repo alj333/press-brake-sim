@@ -11,6 +11,7 @@ import {
 } from '../bend';
 import { toolLoadCheck } from '../tools';
 import type { ToolLoadCheck } from '../tools';
+import { availableSegmentLengths, hasBoundedSegmentInventory } from '../tools/stock';
 import type { BendInfo, PlanContext, StationInfo } from './context';
 import type { PlacementDetails } from './placement';
 
@@ -268,12 +269,17 @@ export function analyseStation(ctx: PlanContext, b: BendInfo, st: StationInfo, m
   } else {
     const fromStation = bestSegmentsWithin(usableLength, st.station.segments, false);
     let best = fromStation, bestSum = sum(fromStation);
-    if (bestSum < required - 1e-9 || bestSum <= 0) {
-      const fromPunch = bestSegmentsWithin(usableLength, st.punch.segmentLengths, true);
+    if (!hasBoundedSegmentInventory(st.punch) && (bestSum < required - 1e-9 || bestSum <= 0)) {
+      const fromPunch = bestSegmentsWithin(
+        usableLength,
+        availableSegmentLengths(st.punch),
+        true,
+      );
       const s2 = sum(fromPunch);
       if (s2 > bestSum) { best = fromPunch; bestSum = s2; }
     }
-    if (bestSum <= 0 && st.station.segments.length === 0 && st.punch.segmentLengths.length === 0) {
+    if (bestSum <= 0 && st.station.segments.length === 0
+      && !hasBoundedSegmentInventory(st.punch) && st.punch.segmentLengths.length === 0) {
       // a single full-length tool: it cannot be shortened
       best = []; bestSum = st.length;
     }

@@ -7,12 +7,13 @@
  */
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { SHOT_DIR, collectErrors, loadSample, openApp, plan, shot } from './helpers.ts';
+import { SHOT_DIR, collectErrors, loadSample, openApp, plan, selectReferenceTooling, shot } from './helpers.ts';
 
 test('acute bracket: 88° tools are rejected, the acute station makes it feasible', async ({ page }) => {
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'acute-bracket');
+  await selectReferenceTooling(page);
   await expect(page.getByTestId('bend-angle-B1')).toHaveValue('135');
   await expect(page.getByTestId('thickness-input')).toHaveValue('1.5');
 
@@ -48,6 +49,7 @@ test('editing a bend clears the program; the re-plan follows the new angle', asy
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'L-bracket');
+  await selectReferenceTooling(page);
   await plan(page, 1);
   await expect(page.getByTestId('step-angle-0')).toContainText('90°');
 
@@ -75,6 +77,7 @@ test('drag-reordering the steps fixes the order and Auto restores it', async ({ 
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'box-4-flange');
+  await selectReferenceTooling(page);
   await plan(page, 4);
   const before: string[] = [];
   for (let i = 0; i < 4; i++) before.push((await page.getByTestId(`step-${i}`).getAttribute('data-bend-id')) ?? '');
@@ -98,6 +101,7 @@ test('BENDS table arrows quickly reorder the real program and restore Auto', asy
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'box-4-flange');
+  await selectReferenceTooling(page);
   await plan(page, 4);
   const before: string[] = [];
   for (let i = 0; i < 4; i++) before.push((await page.getByTestId(`step-${i}`).getAttribute('data-bend-id')) ?? '');
@@ -122,10 +126,11 @@ test('BENDS table arrows quickly reorder the real program and restore Auto', asy
   errors.assertClean();
 });
 
-test('save project → new → load project restores the part and the program', async ({ page }) => {
+test('save project → new → load restores the part and marks unavailable legacy tooling stale', async ({ page }) => {
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'Z-bracket');
+  await selectReferenceTooling(page);
   await plan(page, 2);
   await page.getByTestId('project-name').fill('Bracket job 42');
 
@@ -148,7 +153,9 @@ test('save project → new → load project restores the part and the program', 
   await page.getByTestId('tab-sequence').click();
   await expect(page.getByTestId('steps').locator('[role="listitem"]')).toHaveCount(2);
   await expect(page.getByTestId('program-feasible')).toHaveText('Feasible');
-  await expect(page.getByTestId('program-stale')).toHaveCount(0);
+  // The historical reference tools are deliberately no longer stocked. Preserve the saved
+  // program for inspection, but require an explicit re-plan before it can look current.
+  await expect(page.getByTestId('program-stale')).toBeVisible();
   await expect(page.getByTestId('sim-play')).toBeEnabled();              // timeline rebuilt
   await expect(page.getByTestId('sim-time')).toHaveAttribute('data-duration-s', /^[1-9]\d*\./);
   await page.getByTestId('tab-program').click();

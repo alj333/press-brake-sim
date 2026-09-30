@@ -6,7 +6,7 @@
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { collectErrors, loadSample, openApp, plan, samplePath, shot } from './helpers.ts';
+import { collectErrors, loadSample, openApp, plan, samplePath, selectReferenceTooling, shot } from './helpers.ts';
 
 async function addCustomTool(page: Page, file: string, kind: 'punch' | 'die' | 'finger', name: string): Promise<void> {
   await page.getByTestId('add-custom-tool').click();
@@ -100,6 +100,7 @@ test('(h) machine bed length edit persists after a re-plan', async ({ page }) =>
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'L-bracket');
+  await selectReferenceTooling(page);
   await plan(page, 1);
   await expect(page.getByTestId('program-stale')).toHaveCount(0);
 
@@ -120,7 +121,7 @@ test('(h) machine bed length edit persists after a re-plan', async ({ page }) =>
   await zEnd.fill('2500');
   await zEnd.press('Enter');
   await expect(zEnd).toHaveValue('2500');
-  await expect(page.getByTestId('setup-warnings')).toHaveCount(0);
+  await expect(page.getByTestId('setup-warnings').locator('.msg-error')).toHaveCount(0);
 
   await plan(page, 1);
   await expect(page.getByTestId('program-stale')).toHaveCount(0);

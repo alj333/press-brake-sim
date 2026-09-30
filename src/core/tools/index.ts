@@ -18,8 +18,14 @@ export { isSimplePolygon, fitCircle, tipArc, mirrorProfileX, translateProfile, T
 export type { CircleFit } from './profile';
 export {
   buildStandardLibrary, standardPunches, standardDies, standardFingers, standardMaterials, standardDieId,
-  LIBRARY_VERSION, STANDARD_V_WIDTHS, MULTI_V_WIDTHS, STANDARD_PUNCH_ID, STANDARD_FINGER_ID, STANDARD_MATERIAL_ID,
+  LIBRARY_VERSION, STANDARD_V_WIDTHS, MULTI_V_WIDTHS, STANDARD_PUNCH_ID, DEFAULT_PUNCH_ID, STANDARD_FINGER_ID, STANDARD_MATERIAL_ID,
 } from './standard';
+export {
+  motionXFactoryPunch, motionXFactoryDies, MOTIONX_PUNCH_ID, MOTIONX_DIE_SLOT_IDS,
+  MOTIONX_DEFAULT_DIE_ID, MOTIONX_DIE_PHYSICAL_ID, MOTIONX_PUNCH_INVENTORY,
+  MOTIONX_TOOL_SOURCE_URL, MOTIONX_TOOL_SOURCE_SHA256,
+} from './factory';
+export { isToolInStock, hasBoundedSegmentInventory, expandSegmentInventory, availableSegmentLengths } from './stock';
 export { toolLoadCheck, daylightCheck, strokeCheck } from './checks';
 export { defaultToolSetup, pickDieForThickness, segmentsForLength } from './setup';
 export type { DefaultSetupOptions } from './setup';

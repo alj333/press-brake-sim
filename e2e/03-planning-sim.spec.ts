@@ -7,7 +7,7 @@
  */
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { collectErrors, loadSample, openApp, plan, shot } from './helpers.ts';
+import { collectErrors, loadSample, openApp, plan, selectReferenceTooling, shot } from './helpers.ts';
 
 const PHASES = ['position', 'gauge', 'approach', 'bend', 'release', 'retract', 'reposition'];
 
@@ -36,6 +36,7 @@ test('(d) U-channel: 2 steps with backgauge X > 0, ram depth, program rows', asy
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'U-channel');
+  await selectReferenceTooling(page);
   await plan(page, 2);
 
   await expect(page.getByTestId('program-feasible')).toHaveText('Feasible');
@@ -77,6 +78,7 @@ test('(e) box-4-flange: 4 feasible steps, playback advances, phases step through
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'box-4-flange');
+  await selectReferenceTooling(page);
   await plan(page, 4);
 
   await expect(page.getByTestId('program-feasible')).toHaveText('Feasible');
@@ -177,6 +179,7 @@ test('(f) hat-channel: the plan needs at least one flip', async ({ page }) => {
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'hat-channel');
+  await selectReferenceTooling(page);
   await plan(page, 4);
 
   const turns: string[] = [];

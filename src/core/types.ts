@@ -232,6 +232,14 @@ export interface ToolProfile {
 
 export type ToolSource = 'standard' | 'custom';
 
+export type ToolStockStatus = 'in-stock' | 'not-in-stock';
+
+/** A physical tool segment size and the number of pieces actually available. */
+export interface SegmentInventoryItem {
+  length: number;
+  quantity: number;
+}
+
 /** Ids: standard items 'std:<slug>', custom items 'custom:<uuid>'. */
 export interface ToolBase {
   id: string;
@@ -243,6 +251,15 @@ export interface ToolBase {
   maxLoadPerMeter: number;
   /** Available segment lengths (mm). Empty ⇒ a single full-length tool = machine bed. */
   segmentLengths: number[];
+  /** Availability at this factory. Missing on legacy/custom tools means in stock. */
+  stockStatus?: ToolStockStatus;
+  /**
+   * Finite physical segment inventory. When present, each size may be used at most `quantity`
+   * times; when missing, `segmentLengths` retains its legacy reusable-size semantics.
+   */
+  segmentInventory?: SegmentInventoryItem[];
+  /** Shared physical assembly id (for example, several selectable grooves on one multi-V die). */
+  physicalToolId?: string;
   profile: ToolProfile;
   notes?: string;
 }
@@ -266,6 +283,10 @@ export type DieFamily = 'v' | 'multi-v' | 'hemming' | 'u' | 'custom';
 export interface Die extends ToolBase {
   kind: 'die';
   family: DieFamily;
+  /** Operator-facing groove number when this die represents one selectable groove. */
+  slotNumber?: string;
+  /** Optional operator-facing location/orientation of that groove on the physical die. */
+  slotPosition?: string;
   /** V opening at the shoulder plane, mm (active V). Convention: a flat die without a notch (hemming
    *  die, custom flat die) has vWidth 0 and vAngle 180 — never feed V = 0 into airBendForce; hemming
    *  stations are identified by family === 'hemming' and use hemFlattenForce. */
@@ -295,7 +316,7 @@ export interface ToolLibrary {
   fingers: Finger[];
   materials: Material[];
   machines: Machine[];
-  /** Schema version for persistence migrations (current: 1). */
+  /** Schema version for persistence migrations (current: 2). */
   version: number;
   /** Optimistic-concurrency revision for the shared server copy (PUT with a stale revision → 409). */
   revision: number;
@@ -462,10 +483,11 @@ export interface BendStep {
   /** Ram Y (clamp bottom) at pinch (punch tip touching the sheet) and the upper limit to retract to. */
   pinchY: number;
   ramUpperLimit: number;
-  /** Required force (kN), per metre (kN/m), and as % of the weakest tool rating. */
+  /** Required force (kN), per metre (kN/m), and as % of the weakest tool rating.
+   *  `null` means at least one selected tool has no verified load rating. */
   force: number;
   forcePerMeter: number;
-  loadPercentOfTool: number;
+  loadPercentOfTool: number | null;
   /** Bend line length (mm), punch length used, part Z offset from the station start. The punch
    *  piece of length punchLength (composed of `segments`) is CENTRED in the station
    *  ((zStart + zEnd)/2 ± punchLength/2); partZOffset places the part's left-most point relative

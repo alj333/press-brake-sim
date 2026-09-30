@@ -7,6 +7,7 @@ import { toolLoadCheck, daylightCheck, strokeCheck } from './checks';
 import { isSimplePolygon } from './profile';
 import { deriveDieParams, derivePunchParams } from './derive';
 import type { Tool } from '../types';
+import { MOTIONX_DIE_SLOT_IDS, MOTIONX_PUNCH_ID } from './factory';
 
 function profileOk(t: Tool): void {
   const pts = t.profile.points;
@@ -30,9 +31,11 @@ describe('standard library', () => {
   it('contains everything ARCHITECTURE lists with stable ids', () => {
     const ids = (arr: { id: string }[]): string[] => arr.map(x => x.id);
     expect(ids(lib.punches)).toEqual([
+      MOTIONX_PUNCH_ID,
       'std:punch-straight-88-r0.8', 'std:punch-straight-88-r0.2', 'std:punch-straight-85-r0.8', 'std:punch-gooseneck-88-r0.8',
       'std:punch-acute-30-r0.8', 'std:punch-acute-28-r1', 'std:punch-radius-r3', 'std:punch-radius-r5', 'std:punch-radius-r10', 'std:punch-hemming',
     ]);
+    expect(ids(lib.dies).slice(0, 7)).toEqual(Object.values(MOTIONX_DIE_SLOT_IDS));
     for (const v of [6, 8, 10, 12, 16, 20, 25, 32, 40, 50, 63, 80]) expect(ids(lib.dies)).toContain(`std:die-v${v}-88`);
     for (const id of ['std:die-v12-85', 'std:die-v16-85', 'std:die-v12-30', 'std:die-v16-30', 'std:die-multi-v16', 'std:die-multi-v22', 'std:die-multi-v35', 'std:die-multi-v50', 'std:die-hemming']) {
       expect(ids(lib.dies)).toContain(id);
@@ -46,6 +49,10 @@ describe('standard library', () => {
     const all = [...ids(lib.punches), ...ids(lib.dies), ...ids(lib.fingers), ...ids(lib.materials), ...ids(lib.machines)];
     expect(new Set(all).size).toBe(all.length);
     for (const t of [...lib.punches, ...lib.dies, ...lib.fingers]) expect(t.source).toBe('standard');
+    expect(lib.punches.find(p => p.id === MOTIONX_PUNCH_ID)?.stockStatus).toBe('in-stock');
+    expect(lib.dies.filter(d => d.physicalToolId).every(d => d.stockStatus === 'in-stock')).toBe(true);
+    expect(lib.punches.filter(p => p.id !== MOTIONX_PUNCH_ID).every(p => p.stockStatus === 'not-in-stock')).toBe(true);
+    expect(lib.dies.filter(d => !d.physicalToolId).every(d => d.stockStatus === 'not-in-stock')).toBe(true);
   });
 
   it('every profile is closed, CCW, simple and respects its y-extent rule', () => {
@@ -62,9 +69,11 @@ describe('standard library', () => {
     for (const d of lib.dies) {
       if (d.family === 'hemming') continue;
       const r = deriveDieParams(d.profile.points);
-      expect(r.vWidth, d.id).toBeCloseTo(d.vWidth, 3);
-      expect(r.vAngle, d.id).toBeCloseTo(d.vAngle, 3);
-      expect(r.vCentreX, d.id).toBeCloseTo(0, 6);
+      if (!d.physicalToolId) {
+        expect(r.vWidth, d.id).toBeCloseTo(d.vWidth, 3);
+        expect(r.vAngle, d.id).toBeCloseTo(d.vAngle, 3);
+      }
+      expect(r.vCentreX, d.id).toBeCloseTo(0, d.physicalToolId ? 5 : 6);
     }
   });
 
@@ -88,7 +97,10 @@ describe('standard library', () => {
     expect(punch('std:punch-acute-30-r0.8').maxLoadPerMeter).toBe(400);
     expect(punch('std:punch-radius-r5').maxLoadPerMeter).toBe(800);
     expect(punch('std:punch-hemming').maxLoadPerMeter).toBe(800);
-    for (const p of lib.punches) { expect(p.height).toBe(120); expect(p.segmentLengths).toEqual([10, 15, 20, 40, 50, 100, 200, 300, 415, 835, 3000]); }
+    for (const p of lib.punches.filter(p => p.id !== MOTIONX_PUNCH_ID)) {
+      expect(p.height).toBe(120);
+      expect(p.segmentLengths).toEqual([10, 15, 20, 40, 50, 100, 200, 300, 415, 835, 3000]);
+    }
     const f = lib.fingers.find(x => x.id === 'std:finger-flat')!;
     expect([f.stopHeight, f.bodyDepth, f.width, f.height]).toEqual([20, 60, 30, 35]);
     const m = lib.materials.find(x => x.id === 'std:mild-steel')!;
@@ -131,7 +143,7 @@ describe('standard library', () => {
 describe('checks', () => {
   const lib = buildStandardLibrary();
   const machine = lib.machines[0]!;
-  const punch = lib.punches[0]!;
+  const punch = lib.punches.find(p => p.id === STANDARD_PUNCH_ID)!;
   const die = lib.dies.find(d => d.id === 'std:die-v16-88')!;
 
   it('toolLoadCheck: percent of the weakest rating, overload and near-limit messages', () => {

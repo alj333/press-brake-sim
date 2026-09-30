@@ -15,14 +15,42 @@ import { CustomToolDialog } from './CustomToolDialog';
 import { downloadText, safeFileName } from '../project';
 import { fmt, joinNumberList, parseNumberList } from '../format';
 
-function groupBy<T extends { family: string }>(items: readonly T[]): Array<[string, T[]]> {
-  const map = new Map<string, T[]>();
-  for (const it of items) {
-    const arr = map.get(it.family) ?? [];
-    arr.push(it);
-    map.set(it.family, arr);
-  }
-  return [...map.entries()];
+type StockStatus = 'in-stock' | 'not-in-stock';
+type ToolPresentation = {
+  stockStatus?: StockStatus;
+  slotNumber?: string;
+  slotPosition?: string;
+  segmentInventory?: Array<{ length: number; quantity: number }>;
+};
+
+function stockStatusOf(tool: Punch | Die): StockStatus {
+  const status = (tool as (Punch | Die) & ToolPresentation).stockStatus;
+  return status === undefined || status === 'in-stock' ? 'in-stock' : 'not-in-stock';
+}
+
+function dieSlotLabel(die: Die, t: (k: string, p?: Record<string, string | number>) => string): string | null {
+  const { slotNumber, slotPosition } = die as Die & ToolPresentation;
+  const hasNumber = typeof slotNumber === 'string' && slotNumber.trim().length > 0;
+  const hasPosition = typeof slotPosition === 'string' && slotPosition.trim().length > 0;
+  const position = hasPosition ? t(`tools.diePosition.${slotPosition}`) : '';
+  if (hasNumber && hasPosition) return t('tools.dieSlotWithPosition', { slot: slotNumber, position });
+  if (hasNumber) return t('tools.dieSlot', { slot: slotNumber });
+  if (hasPosition) return t('tools.dieSlotPosition', { position });
+  return null;
+}
+
+function toolDisplayName(tool: Punch | Die, t: (k: string, p?: Record<string, string | number>) => string): string {
+  const slot = tool.kind === 'die' ? dieSlotLabel(tool, t) : null;
+  return `${tool.name}${slot ? ` · ${slot}` : ''}${tool.source === 'custom' ? ' *' : ''}`;
+}
+
+function segmentInventoryLabel(punch: Punch, t: (k: string, p?: Record<string, string | number>) => string): string | null {
+  const inventory = (punch as Punch & ToolPresentation).segmentInventory;
+  if (!Array.isArray(inventory)) return null;
+  const items = inventory
+    .filter(item => Number.isFinite(item?.length) && item.length > 0 && Number.isInteger(item?.quantity) && item.quantity > 0)
+    .map(item => t('tools.segmentInventoryItem', { length: fmt(item.length, 1), quantity: item.quantity }));
+  return items.length > 0 ? `${t('tools.segmentInventory')}: ${items.join(', ')}` : null;
 }
 
 interface ToolSelectProps<T extends Punch | Die> {
@@ -35,19 +63,34 @@ interface ToolSelectProps<T extends Punch | Die> {
 
 function ToolSelect<T extends Punch | Die>({ items, value, onChange, testId, label }: ToolSelectProps<T>) {
   const { t } = useI18n();
-  const groups = useMemo(() => groupBy(items), [items]);
-  const known = items.some(i => i.id === value);
+  const groups = useMemo(() => [
+    { status: 'in-stock' as const, items: items.filter(item => stockStatusOf(item) === 'in-stock') },
+    { status: 'not-in-stock' as const, items: items.filter(item => stockStatusOf(item) === 'not-in-stock') },
+  ], [items]);
+  const selected = items.find(item => item.id === value);
+  const known = !!selected;
+  const selectedStatus = selected ? stockStatusOf(selected) : null;
+  const warningId = selectedStatus === 'not-in-stock' && testId ? `${testId}-stock-warning` : undefined;
   return (
-    <label className="field">
+    <label className="field tool-select" data-stock-status={selectedStatus ?? 'unknown'}>
       <span className="field-label">{label}</span>
-      <select value={value} onChange={e => onChange(e.target.value)} data-testid={testId}>
+      <select value={value} onChange={e => onChange(e.target.value)} data-testid={testId} aria-describedby={warningId}>
         {!known && <option value={value}>{value}</option>}
-        {groups.map(([family, list]) => (
-          <optgroup key={family} label={t(`family.${family}`)}>
-            {list.map(item => <option key={item.id} value={item.id}>{item.name}{item.source === 'custom' ? ' *' : ''}</option>)}
+        {groups.filter(group => group.items.length > 0).map(group => (
+          <optgroup key={group.status} label={t(`tools.stock.${group.status}`)} data-stock-status={group.status}>
+            {group.items.map(item => (
+              <option key={item.id} value={item.id} data-stock-status={group.status}>
+                {toolDisplayName(item, t)}{group.status === 'not-in-stock' ? ` — ${t('tools.stock.not-in-stock')}` : ''}
+              </option>
+            ))}
           </optgroup>
         ))}
       </select>
+      {selectedStatus === 'not-in-stock' && (
+        <span id={warningId} className="badge badge-warn tool-stock-warning" role="status" data-testid={warningId}>
+          {t('tools.stock.selectedUnavailable')}
+        </span>
+      )}
     </label>
   );
 }
@@ -84,8 +127,12 @@ function SegmentsEditor({ station, onCommit, onAuto }: { station: ToolStation; o
 }
 
 function toolSummary(tool: Punch | Die | Finger, t: (k: string, p?: Record<string, string | number>) => string): string {
-  if (tool.kind === 'punch') return `${t(`family.${tool.family}`)} · ${t('tools.tipAngle')} ${fmt(tool.tipAngle, 1)} · ${t('tools.tipRadius')} ${fmt(tool.tipRadius, 2)} · ${t('tools.height')} ${fmt(tool.height, 1)} · ${t('tools.rating')} ${fmt(tool.maxLoadPerMeter, 0)}`;
-  if (tool.kind === 'die') return `${t(`family.${tool.family}`)} · V ${fmt(tool.vWidth, 1)} · ${fmt(tool.vAngle, 1)}° · ${t('tools.shoulderRadius')} ${fmt(tool.shoulderRadius, 2)} · ${t('tools.height')} ${fmt(tool.height, 1)} · ${t('tools.rating')} ${fmt(tool.maxLoadPerMeter, 0)}`;
+  const rating = tool.maxLoadPerMeter > 0 ? fmt(tool.maxLoadPerMeter, 0) : t('tools.ratingUnverified');
+  if (tool.kind === 'punch') return `${t(`family.${tool.family}`)} · ${t('tools.tipAngle')} ${fmt(tool.tipAngle, 1)} · ${t('tools.tipRadius')} ${fmt(tool.tipRadius, 2)} · ${t('tools.height')} ${fmt(tool.height, 1)} · ${t('tools.rating')} ${rating}`;
+  if (tool.kind === 'die') {
+    const slot = dieSlotLabel(tool, t);
+    return `${slot ? `${slot} · ` : ''}${t(`family.${tool.family}`)} · V ${fmt(tool.vWidth, 1)} · ${fmt(tool.vAngle, 1)}° · ${t('tools.shoulderRadius')} ${fmt(tool.shoulderRadius, 2)} · ${t('tools.height')} ${fmt(tool.height, 1)} · ${t('tools.rating')} ${rating}`;
+  }
   return `${t('tools.stopHeight')} ${fmt(tool.stopHeight, 1)} · ${t('tools.bodyDepth')} ${fmt(tool.bodyDepth, 1)} · ${t('tools.width')} ${fmt(tool.width, 1)}`;
 }
 
@@ -104,8 +151,9 @@ export function ToolsPanel() {
   const station = stations.find(s => s.id === activeStation) ?? stations[0];
   const punch = station ? library.punches.find(p => p.id === station.punchId) : undefined;
   const die = station ? library.dies.find(d => d.id === station.dieId) : undefined;
+  const punchInventory = punch ? segmentInventoryLabel(punch, t) : null;
   const finger = library.fingers.find(f => f.id === machine.backgauge.fingerId);
-  const arc = useMemo(() => (punch ? derivePunchParams(punch.profile.points).arcVertices : []), [punch]);
+  const arc = punch ? derivePunchParams(punch.profile.points).arcVertices : [];
   const customTools = useMemo<Array<Punch | Die | Finger>>(
     () => [...library.punches, ...library.dies, ...library.fingers].filter(x => x.source === 'custom'),
     [library],
@@ -166,14 +214,17 @@ export function ToolsPanel() {
         <h3 className="section-title">{t('tools.preview')}</h3>
         <div className="previews">
           <div>
-            <div className="small muted">{t('tools.punchPreview')}{punch ? `: ${punch.name}` : ''}</div>
+            <div className="small muted">{t('tools.punchPreview')}{punch ? `: ${toolDisplayName(punch, t)}` : ''}</div>
             <ProfilePreview points={punch?.profile.points ?? []} highlight={arc} mirrored={station?.punchFlipped} height={170} testId="punch-preview" />
             {punch && <div className="small muted">{toolSummary(punch, t)}</div>}
+            {punchInventory && (
+              <div className="small tool-inventory" data-testid="punch-segment-inventory">{punchInventory}</div>
+            )}
           </div>
           <div>
-            <div className="small muted">{t('tools.diePreview')}{die ? `: ${die.name}` : ''}</div>
+            <div className="small muted">{t('tools.diePreview')}{die ? `: ${toolDisplayName(die, t)}` : ''}</div>
             <ProfilePreview points={die?.profile.points ?? []} mirrored={station?.dieFlipped} height={170} testId="die-preview" />
-            {die && <div className="small muted">{toolSummary(die, t)}</div>}
+            {die && <div className="small muted" data-testid="die-slot-summary">{toolSummary(die, t)}</div>}
           </div>
         </div>
       </section>
@@ -217,7 +268,11 @@ export function ToolsPanel() {
               return (
                 <li key={tool.id} className="list-item" data-testid={`custom-tool-${tool.id}`}>
                   <div className="row row-between">
-                    <span><strong>{tool.name}</strong> <span className="badge">{t(`tools.kind.${tool.kind}`)}</span> {inUse && <span className="badge badge-user">{t('tools.inUse')}</span>}</span>
+                    <span>
+                      <strong>{tool.name}</strong> <span className="badge">{t(`tools.kind.${tool.kind}`)}</span>{' '}
+                      {inUse && <span className="badge badge-user">{t('tools.inUse')}</span>}{' '}
+                      {tool.kind !== 'finger' && stockStatusOf(tool) === 'not-in-stock' && <span className="badge badge-warn">{t('tools.stock.not-in-stock')}</span>}
+                    </span>
                     <button type="button" className="btn btn-ghost btn-small" title={t('tools.deleteTool')} aria-label={t('tools.deleteTool')} disabled={inUse} onClick={() => { if (window.confirm(t('tools.deleteConfirm', { name: tool.name }))) actions.removeLibraryItem(tool.id); }}>✕</button>
                   </div>
                   <div className="small muted">{toolSummary(tool, t)}</div>

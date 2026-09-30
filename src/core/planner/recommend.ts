@@ -7,6 +7,7 @@ import type {
   BendProgram, Die, Message, ObstacleKind, Punch, ToolSetup, ToolStation, Vec3,
 } from '../types';
 import { segmentsForLength, vDie } from '../tools';
+import { availableSegmentLengths, hasBoundedSegmentInventory, isToolInStock } from '../tools/stock';
 import { planProgram } from './program';
 import type { PlannerInput } from './context';
 
@@ -138,9 +139,11 @@ function issueSummary(program: BendProgram): FeasibilityIssueSummary {
 
 function stationWithPunch(station: ToolStation, punch: Punch): ToolStation | null {
   const length = Math.abs(station.zEnd - station.zStart);
-  const pieces = punch.segmentLengths.filter(piece => piece > 0 && piece <= 835);
-  const available = pieces.length > 0 ? pieces : punch.segmentLengths.filter(piece => piece > 0);
-  const segments = available.length > 0 ? segmentsForLength(length, available) : [];
+  const bounded = hasBoundedSegmentInventory(punch);
+  const physicalPieces = availableSegmentLengths(punch);
+  const pieces = physicalPieces.filter(piece => piece > 0 && (bounded || piece <= 835));
+  const available = pieces.length > 0 ? pieces : physicalPieces.filter(piece => piece > 0);
+  const segments = available.length > 0 ? segmentsForLength(length, available, !bounded) : [];
   const sum = segments.reduce((total, piece) => total + piece, 0);
   if (segments.length > 0 && Math.abs(sum - length) > 0.5) return null;
   return { ...station, punchId: punch.id, segments };
@@ -171,7 +174,7 @@ function buildLibraryJobs(input: PlannerInput, baseline: BendProgram): Candidate
     if (!currentPunch || !currentDie) continue;
     if (scanDies) {
       for (const die of [...input.library.dies].sort((a, b) => a.id.localeCompare(b.id))) {
-        if (die.id === currentDie.id || die.family === 'hemming' || !(die.vWidth > 0)) continue;
+        if (!isToolInStock(die) || die.id === currentDie.id || die.family === 'hemming' || !(die.vWidth > 0)) continue;
         add({
           id: `die:${station.id}:${die.id}`,
           setup: replaceStation(input.setup, station.id, { ...station, dieId: die.id, segments: [...station.segments] }),
@@ -181,7 +184,7 @@ function buildLibraryJobs(input: PlannerInput, baseline: BendProgram): Candidate
     }
     if (scanPunches) {
       for (const punch of [...input.library.punches].sort((a, b) => a.id.localeCompare(b.id))) {
-        if (punch.id === currentPunch.id || punch.family === 'hemming' || !(punch.tipAngle < 180)) continue;
+        if (!isToolInStock(punch) || punch.id === currentPunch.id || punch.family === 'hemming' || !(punch.tipAngle < 180)) continue;
         const next = stationWithPunch(station, punch);
         if (!next) continue;
         add({
@@ -193,8 +196,8 @@ function buildLibraryJobs(input: PlannerInput, baseline: BendProgram): Candidate
     }
     if (angleError) {
       const loadedLimit = Math.min(...baseline.steps.filter(step => step.stationId === station.id).map(step => step.loadedIncludedAngle));
-      const punches = input.library.punches.filter(punch => punch.family !== 'hemming' && punch.tipAngle < loadedLimit - 0.25).sort((a, b) => b.tipAngle - a.tipAngle || a.id.localeCompare(b.id)).slice(0, 4);
-      const dies = input.library.dies.filter(die => die.family !== 'hemming' && die.vWidth > 0 && die.vAngle < loadedLimit - 0.25).sort((a, b) => Math.abs(a.vWidth - currentDie.vWidth) - Math.abs(b.vWidth - currentDie.vWidth) || b.vAngle - a.vAngle || a.id.localeCompare(b.id)).slice(0, 6);
+      const punches = input.library.punches.filter(punch => isToolInStock(punch) && punch.family !== 'hemming' && punch.tipAngle < loadedLimit - 0.25).sort((a, b) => b.tipAngle - a.tipAngle || a.id.localeCompare(b.id)).slice(0, 4);
+      const dies = input.library.dies.filter(die => isToolInStock(die) && die.family !== 'hemming' && die.vWidth > 0 && die.vAngle < loadedLimit - 0.25).sort((a, b) => Math.abs(a.vWidth - currentDie.vWidth) - Math.abs(b.vWidth - currentDie.vWidth) || b.vAngle - a.vAngle || a.id.localeCompare(b.id)).slice(0, 6);
       for (const punch of punches) for (const die of dies) {
         const next = stationWithPunch({ ...station, dieId: die.id }, punch);
         if (!next) continue;
@@ -366,7 +369,7 @@ export function recommendSetups(
 
       if (baseline.steps.some(step => step.stationId === station.id && step.bottoming)) {
         const marginPunch = [...input.library.punches]
-          .filter(punch => punch.family !== 'hemming' && punch.tipAngle < currentPunch.tipAngle && punch.tipAngle >= 80)
+          .filter(punch => isToolInStock(punch) && punch.family !== 'hemming' && punch.tipAngle < currentPunch.tipAngle && punch.tipAngle >= 80)
           .sort((a, b) => b.tipAngle - a.tipAngle || a.id.localeCompare(b.id))[0];
         if (marginPunch) {
           const marginDie = vDie({ vWidth: currentDie.vWidth, vAngle: marginPunch.tipAngle, shoulderRadius: currentDie.shoulderRadius, height: currentDie.height, bodyWidth: conceptWidth }, {

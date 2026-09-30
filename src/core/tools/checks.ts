@@ -5,30 +5,43 @@ import type { Die, Machine, Message, Punch } from '../types';
 
 export interface ToolLoadCheck {
   ok: boolean;
-  /** Load as % of the weakest tool rating. */
-  percentOfTool: number;
-  /** Name of the weakest tool (the one the percentage refers to). */
+  /** Load as % of the weakest tool rating; null when either tool is unrated. */
+  percentOfTool: number | null;
+  /** Name of the weakest known-rated tool, or the first unrated tool when no rating is known. */
   limitingTool: string;
   message?: Message;
 }
 
 /** Air-bend (or hem) load per metre against the punch/die ratings (kN/m). */
 export function toolLoadCheck(forcePerMeter: number, punch: Pick<Punch, 'name' | 'maxLoadPerMeter'>, die: Pick<Die, 'name' | 'maxLoadPerMeter'>): ToolLoadCheck {
-  const punchRating = punch.maxLoadPerMeter > 0 ? punch.maxLoadPerMeter : Infinity;
-  const dieRating = die.maxLoadPerMeter > 0 ? die.maxLoadPerMeter : Infinity;
-  const limitingTool = dieRating < punchRating ? die.name : punch.name;
-  const rating = Math.min(punchRating, dieRating);
+  const unrated = [punch, die].filter(tool => !(tool.maxLoadPerMeter > 0));
+  const rated = [punch, die].filter(tool => tool.maxLoadPerMeter > 0);
+  const limitingRated = rated.reduce<(typeof rated)[number] | undefined>(
+    (lowest, tool) => !lowest || tool.maxLoadPerMeter < lowest.maxLoadPerMeter ? tool : lowest,
+    undefined,
+  );
+  const limitingTool = limitingRated?.name ?? unrated[0]?.name ?? punch.name;
+  const rating = limitingRated?.maxLoadPerMeter ?? Infinity;
   // a non-finite load (e.g. airBendForce with V = 0) can never be OK; a negative one is a caller bug → treat as 0
   const load = Number.isNaN(forcePerMeter) ? Infinity : Math.max(0, forcePerMeter);
-  const percentOfTool = rating === Infinity ? (load === Infinity ? Infinity : 0) : (100 * load) / rating;
-  const percent = Number.isFinite(percentOfTool) ? Math.round(percentOfTool * 10) / 10 : percentOfTool;
-  if (percentOfTool > 100) {
+  const knownPercent = rating === Infinity ? (load === Infinity ? Infinity : 0) : (100 * load) / rating;
+  const percent = Number.isFinite(knownPercent) ? Math.round(knownPercent * 10) / 10 : knownPercent;
+  const percentOfTool = unrated.length > 0 ? null : knownPercent;
+  if (!Number.isFinite(load) || knownPercent > 100) {
     return { ok: false, percentOfTool, limitingTool, message: { key: 'warnings.tool.overload', severity: 'error', params: { tool: limitingTool, percent } } };
   }
-  if (percentOfTool > 90) {
-    return { ok: true, percentOfTool, limitingTool, message: { key: 'warnings.tool.loadNearLimit', severity: 'warning', params: { tool: limitingTool, percent } } };
+  if (unrated.length > 0) {
+    return {
+      ok: true,
+      percentOfTool,
+      limitingTool,
+      message: { key: 'warnings.tool.loadUnverified', severity: 'warning', params: { tools: unrated.map(tool => tool.name).join(' / ') } },
+    };
   }
-  return { ok: true, percentOfTool, limitingTool };
+  if (knownPercent > 90) {
+    return { ok: true, percentOfTool: knownPercent, limitingTool, message: { key: 'warnings.tool.loadNearLimit', severity: 'warning', params: { tool: limitingTool, percent } } };
+  }
+  return { ok: true, percentOfTool: knownPercent, limitingTool };
 }
 
 export interface DaylightCheck {

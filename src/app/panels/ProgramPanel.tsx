@@ -55,7 +55,9 @@ function StepRow({ step }: { step: BendStep }) {
       <td className="num-cell">{fmt(step.partZOffset, 1)}</td>
       <td className="num-cell"><strong>{fmt(step.ramDepth, 2)}</strong></td>
       <td className="num-cell">{fmt(step.force, 1)} kN<div className="small">{fmt(kNToTonnes(step.force), 2)} t</div></td>
-      <td className="num-cell">{fmt(step.loadPercentOfTool, 0)} %</td>
+      <td className="num-cell">{step.loadPercentOfTool === null
+        ? <span className="text-warn"><Both k="warnings.tool.loadUnverified" params={{ tools: `${step.punchName} / ${step.dieName}` }} /></span>
+        : `${fmt(step.loadPercentOfTool, 0)} %`}</td>
       <td><Both k={`turn.${step.manipulation.turn}`} />{step.manipulation.stationChange && <div className="small muted"><Both k="sequence.stationChange" /></div>}</td>
       <td><Both k={`faceUp.${step.orientation.faceUp}`} /> / {step.orientation.backFlangeId}</td>
       <td className="notes-cell">{notes.map((n, i) => <div key={i} className="small">{n}</div>)}</td>

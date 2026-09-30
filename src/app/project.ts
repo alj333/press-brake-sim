@@ -167,7 +167,7 @@ function validateOptions(v: unknown): PlannerOptions {
 
 const STEP_NUMBER_FIELDS = [
   'index', 'targetAngle', 'includedAngle', 'springback', 'overbendAngle', 'loadedIncludedAngle', 'actualInnerRadius', 'ramDepth', 'pinchY',
-  'ramUpperLimit', 'force', 'forcePerMeter', 'loadPercentOfTool', 'bendLength', 'punchLength', 'partZOffset', 'gaugedFlangeOutside', 'bendDeduction',
+  'ramUpperLimit', 'force', 'forcePerMeter', 'bendLength', 'punchLength', 'partZOffset', 'gaugedFlangeOutside', 'bendDeduction',
 ] as const;
 const STEP_STRING_FIELDS = ['bendId', 'stationId', 'punchId', 'dieId', 'punchName', 'dieName'] as const;
 
@@ -179,6 +179,7 @@ function isMat4(v: unknown): boolean {
 function isBendStep(v: unknown, bendIds: Set<string>): v is BendStep {
   if (!isObject(v)) return false;
   if (!STEP_NUMBER_FIELDS.every(k => typeof v[k] === 'number' && Number.isFinite(v[k]))) return false;
+  if (v.loadPercentOfTool !== null && !(typeof v.loadPercentOfTool === 'number' && Number.isFinite(v.loadPercentOfTool))) return false;
   if (!STEP_STRING_FIELDS.every(k => typeof v[k] === 'string')) return false;
   if (!bendIds.has(v.bendId as string)) return false;
   if (v.kind !== 'bend' && v.kind !== 'hem-flatten') return false;
@@ -323,7 +324,9 @@ const CSV_COLUMNS: Array<[string, (s: BendStep, lang: Language) => string | numb
   ['program.col.ramDepth', s => fmt(s.ramDepth, 2)],
   ['sequence.force', s => fmt(s.force, 1)],
   ['common.tonnes', s => fmt(kNToTonnes(s.force), 2)],
-  ['program.col.ofTool', s => fmt(s.loadPercentOfTool, 0)],
+  ['program.col.ofTool', (s, lang) => s.loadPercentOfTool === null
+    ? `— ${translate(lang, 'warnings.tool.loadUnverified', { tools: `${s.punchName} / ${s.dieName}` })}`
+    : fmt(s.loadPercentOfTool, 0)],
   ['program.col.turn', (s, lang) => translate(lang, `turn.${s.manipulation.turn}`)],
   ['program.col.orientation', (s, lang) => `${translate(lang, `faceUp.${s.orientation.faceUp}`)} / ${s.orientation.backFlangeId}`],
   ['sequence.bottoming', (s, lang) => (s.bottoming ? translate(lang, 'common.yes') : translate(lang, 'common.no'))],
@@ -340,6 +343,7 @@ export function programToCsv(ctx: ProgramContext, lang: Language = 'en'): string
     `${csvCell(translate('en', 'program.header.material') + ' / ' + translate('th', 'program.header.material'))},${csvCell(ctx.material?.name ?? ctx.program.materialId)}`,
     `${csvCell(translate('en', 'program.header.thickness') + ' / ' + translate('th', 'program.header.thickness'))},${csvCell(ctx.program.thickness)}`,
     `${csvCell(translate('en', 'program.footer.maxForce') + ' / ' + translate('th', 'program.footer.maxForce'))},${csvCell(fmt(ctx.program.maxForce, 1))} kN,${csvCell(fmt(kNToTonnes(ctx.program.maxForce), 2))} t`,
+    ...ctx.program.warnings.map(w => `${csvCell(translate('en', 'sequence.programWarnings') + ' / ' + translate('th', 'sequence.programWarnings'))},${csvCell(translate(lang, w.key, w.params))}`),
     '',
   ];
   return '﻿' + [...meta, header, ...rows].join('\r\n') + '\r\n';

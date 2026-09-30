@@ -12,9 +12,16 @@ import { LibraryStore, STORAGE_KEY } from '../core/library';
 import { useSimStore } from '../sim/store';
 import { createProjectStore, selectMachine, selectSetupMessages } from './store';
 import { parseProject, programToCsv, serializeProject } from './project';
+import { buildStandardLibrary } from '../core/tools';
 
 function makeStore() {
-  return createProjectStore({ libraryStore: new LibraryStore({ storage: null, fetch: null }), useWorker: false, language: 'en' });
+  const shipped = buildStandardLibrary();
+  const reference = {
+    ...shipped,
+    punches: shipped.punches.filter(punch => !punch.id.startsWith('std:motionx-')).map(punch => ({ ...punch, stockStatus: 'in-stock' as const })),
+    dies: shipped.dies.filter(die => !die.id.startsWith('std:motionx-')).map(die => ({ ...die, stockStatus: 'in-stock' as const })),
+  };
+  return createProjectStore({ libraryStore: new LibraryStore({ initial: reference, storage: null, fetch: null }), useWorker: false, language: 'en' });
 }
 
 // ── minimal DXF writer (LINE / CIRCLE entities, $INSUNITS header) ───────────
@@ -444,11 +451,14 @@ describe('store — library loading', () => {
     const cache = new Map<string, string>([[STORAGE_KEY, seed.exportJson()]]);
     const storage = { getItem: (k: string) => cache.get(k) ?? null, setItem: (k: string, v: string) => { cache.set(k, v); } };
     const store = createProjectStore({ libraryStore: new LibraryStore({ storage, fetch: null }), useWorker: false, language: 'en' });
-    expect(store.getState().project.setup.stations[0]!.zEnd).toBe(3100);   // built before the cache was read
+    expect(store.getState().project.setup.stations[0]).toMatchObject({ zStart: 317.5, zEnd: 2782.5 });   // built before the cache was read
     await store.getState().loadLibrary();
     expect(selectMachine(store.getState()).bedLength).toBe(2500);
-    expect(store.getState().project.setup.stations[0]!.zEnd).toBe(2500);
-    expect(selectSetupMessages(store.getState())).toEqual([]);
+    expect(store.getState().project.setup.stations[0]).toMatchObject({ zStart: 17.5, zEnd: 2482.5 });
+    expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
+      'warnings.setup.controllerCadGeometryMismatch',
+      'warnings.setup.dieLengthUnverified',
+    ]);
     // a project in progress is left alone
     store.getState().loadFlat(loadTruth('L-bracket').flat);
     store.getState().updateStation('S1', { zEnd: 1000 });

@@ -4,10 +4,26 @@
  * malformed items — they are dropped with a message; only a non-object input throws.
  * See docs/specs/tooling-machine.md §3.
  */
-import type { Die, DieFamily, Finger, Machine, Material, Message, Polygon2, Punch, PunchFamily, ToolLibrary, ToolSource } from '../types';
+import type {
+  Die,
+  DieFamily,
+  Finger,
+  Machine,
+  Material,
+  Message,
+  Polygon2,
+  Punch,
+  PunchFamily,
+  SegmentInventoryItem,
+  Tool,
+  ToolLibrary,
+  ToolSource,
+  ToolStockStatus,
+} from '../types';
 import { ensureCCW, dedupe } from '../geom';
 import { derivePunchParams, deriveDieParams, deriveFingerParams } from '../tools/derive';
 import { PUNCH_RATINGS } from '../tools/punches';
+import { MAX_SEGMENT_INVENTORY_PIECES } from '../tools/stock';
 import { standardDieRating } from '../tools/dies';
 import { LIBRARY_VERSION, buildStandardLibrary } from '../tools/standard';
 import { CUSTOM_DEFAULT_RATING, enforceFrameExtents } from '../tools/custom';
@@ -68,11 +84,51 @@ function parseSegments(v: unknown): number[] {
   return v.filter((x): x is number => fin(x) && x > 0);
 }
 
+/** Missing inventory retains legacy unbounded-size semantics; malformed explicit inventory fails closed. */
+function parseSegmentInventory(v: unknown): SegmentInventoryItem[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) return [];
+  const inventory: SegmentInventoryItem[] = [];
+  let total = 0;
+  for (const raw of v) {
+    if (!isRec(raw) || !fin(raw['length']) || raw['length'] <= 0 || !Number.isSafeInteger(raw['quantity']) || (raw['quantity'] as number) <= 0) continue;
+    const quantity = raw['quantity'] as number;
+    if (quantity > MAX_SEGMENT_INVENTORY_PIECES || total + quantity > MAX_SEGMENT_INVENTORY_PIECES) return [];
+    inventory.push({ length: raw['length'], quantity });
+    total += quantity;
+  }
+  return inventory;
+}
+
+/** Missing is the legacy in-stock default; an invalid explicit status fails closed. */
+function parseStockStatus(v: unknown): ToolStockStatus | undefined {
+  if (v === undefined) return undefined;
+  return v === 'in-stock' || v === 'not-in-stock' ? v : 'not-in-stock';
+}
+
+function parseOptionalText(v: unknown): string | undefined {
+  if (!str(v)) return undefined;
+  const text = v.trim();
+  return text.length > 0 ? text : undefined;
+}
+
+type MigratedToolBase = {
+  id: string;
+  name: string;
+  source: ToolSource;
+  points: Polygon2;
+  segmentLengths: number[];
+  stockStatus?: ToolStockStatus;
+  segmentInventory?: SegmentInventoryItem[];
+  physicalToolId?: string;
+  notes?: string;
+};
+
 function sourceOf(raw: Rec, id: string): ToolSource {
   return raw['source'] === 'standard' || raw['source'] === 'custom' ? raw['source'] : id.startsWith('std:') ? 'standard' : 'custom';
 }
 
-function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, messages: Message[]): { id: string; name: string; source: ToolSource; points: Polygon2; segmentLengths: number[]; notes?: string } | null {
+function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, messages: Message[]): MigratedToolBase | null {
   const id = raw['id'];
   if (!str(id) || id.length === 0) {
     messages.push({ key: 'warnings.library.itemDropped', severity: 'warning', params: { collection, index, reason: 'missing id' } });
@@ -84,24 +140,53 @@ function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, m
     return null;
   }
   const notes = raw['notes'];
+  const stockStatus = parseStockStatus(raw['stockStatus']);
+  const segmentInventory = parseSegmentInventory(raw['segmentInventory']);
+  const physicalToolId = parseOptionalText(raw['physicalToolId']);
   return {
     id, name: str(raw['name']) && raw['name'].length > 0 ? raw['name'] : id, source: sourceOf(raw, id), points,
     segmentLengths: parseSegments(raw['segmentLengths']),
+    ...(stockStatus !== undefined ? { stockStatus } : {}),
+    ...(segmentInventory !== undefined ? { segmentInventory } : {}),
+    ...(physicalToolId !== undefined ? { physicalToolId } : {}),
     ...(str(notes) ? { notes } : {}),
   };
+}
+
+/** Current built-ins own availability metadata even when a persisted same-id record is stale. */
+function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefined): T {
+  if (!standard) return item;
+  const next = { ...item };
+  delete next.stockStatus;
+  delete next.segmentInventory;
+  delete next.physicalToolId;
+  if (standard.stockStatus !== undefined) next.stockStatus = parseStockStatus(standard.stockStatus);
+  if (standard.segmentInventory !== undefined) next.segmentInventory = parseSegmentInventory(standard.segmentInventory);
+  const physicalToolId = parseOptionalText(standard.physicalToolId);
+  if (physicalToolId !== undefined) next.physicalToolId = physicalToolId;
+  if (next.kind === 'die' && standard.kind === 'die') {
+    delete next.slotNumber;
+    delete next.slotPosition;
+    const slotNumber = parseOptionalText(standard.slotNumber);
+    const slotPosition = parseOptionalText(standard.slotPosition);
+    if (slotNumber !== undefined) next.slotNumber = slotNumber;
+    if (slotPosition !== undefined) next.slotPosition = slotPosition;
+  }
+  return next;
 }
 
 export function migratePunch(v: unknown, index: number, messages: Message[]): Punch | null {
   if (!isRec(v)) { messages.push({ key: 'warnings.library.itemDropped', severity: 'warning', params: { collection: 'punches', index, reason: 'not an object' } }); return null; }
   const base = toolBase(v, index, 'punches', 'punch', messages);
   if (!base) return null;
-  const std = standardItem(base.id);
-  const family: PunchFamily = PUNCH_FAMILIES.includes(v['family'] as PunchFamily) ? (v['family'] as PunchFamily) : std?.kind === 'punch' ? std.family : 'custom';
+  const candidate = standardItem(base.id);
+  const std = candidate?.kind === 'punch' ? candidate : undefined;
+  const family: PunchFamily = PUNCH_FAMILIES.includes(v['family'] as PunchFamily) ? (v['family'] as PunchFamily) : std?.family ?? 'custom';
   const needDerive = !isPos(v['tipRadius'], true) || !isWithin(v['tipAngle'], 1, 180) || !isPos(v['bodyWidth']) || !fin(v['tangCentreX']) || !isPos(v['height']);
   const d = needDerive ? derivePunchParams(base.points) : null;
   if (d) forward(messages, d.messages, 'punches', base.id);
   const { points, ...rest } = base;
-  return {
+  return withCurrentStandardStock({
     kind: 'punch', ...rest, family,
     profile: { points },
     height: pos(v['height'], d ? d.height : 0),
@@ -110,22 +195,27 @@ export function migratePunch(v: unknown, index: number, messages: Message[]): Pu
     tipAngle: within(v['tipAngle'], 1, 180, d ? d.tipAngle : 88),
     bodyWidth: pos(v['bodyWidth'], d ? d.bodyWidth : 20),
     tangCentreX: num(v['tangCentreX'], d ? d.tangCentreX : 0),
-  };
+  }, std);
 }
 
 export function migrateDie(v: unknown, index: number, messages: Message[]): Die | null {
   if (!isRec(v)) { messages.push({ key: 'warnings.library.itemDropped', severity: 'warning', params: { collection: 'dies', index, reason: 'not an object' } }); return null; }
   const base = toolBase(v, index, 'dies', 'die', messages);
   if (!base) return null;
-  const std = standardItem(base.id);
-  const family: DieFamily = DIE_FAMILIES.includes(v['family'] as DieFamily) ? (v['family'] as DieFamily) : std?.kind === 'die' ? std.family : 'custom';
+  const candidate = standardItem(base.id);
+  const std = candidate?.kind === 'die' ? candidate : undefined;
+  const family: DieFamily = DIE_FAMILIES.includes(v['family'] as DieFamily) ? (v['family'] as DieFamily) : std?.family ?? 'custom';
   const needDerive = !isPos(v['vWidth'], true) || !isWithin(v['vAngle'], 0, 180) || !isPos(v['shoulderRadius'], true) || !isPos(v['bodyWidth']) || !isPos(v['height']);
   const d = needDerive ? deriveDieParams(base.points) : null;
   if (d) forward(messages, d.messages, 'dies', base.id);
   const vWidth = pos(v['vWidth'], d ? d.vWidth : 0, true);
   const { points, ...rest } = base;
-  return {
+  const slotNumber = parseOptionalText(v['slotNumber']);
+  const slotPosition = parseOptionalText(v['slotPosition']);
+  return withCurrentStandardStock({
     kind: 'die', ...rest, family,
+    ...(slotNumber !== undefined ? { slotNumber } : {}),
+    ...(slotPosition !== undefined ? { slotPosition } : {}),
     profile: { points },
     height: pos(v['height'], d ? d.height : 0),
     maxLoadPerMeter: pos(v['maxLoadPerMeter'], std?.maxLoadPerMeter ?? (family === 'v' && vWidth > 0 ? standardDieRating(vWidth) : CUSTOM_DEFAULT_RATING), true),
@@ -133,18 +223,20 @@ export function migrateDie(v: unknown, index: number, messages: Message[]): Die 
     vAngle: within(v['vAngle'], 0, 180, d ? d.vAngle : 88),
     shoulderRadius: pos(v['shoulderRadius'], d ? d.shoulderRadius : 0, true),
     bodyWidth: pos(v['bodyWidth'], d ? d.bodyWidth : 60),
-  };
+  }, std);
 }
 
 export function migrateFinger(v: unknown, index: number, messages: Message[]): Finger | null {
   if (!isRec(v)) { messages.push({ key: 'warnings.library.itemDropped', severity: 'warning', params: { collection: 'fingers', index, reason: 'not an object' } }); return null; }
   const base = toolBase(v, index, 'fingers', 'finger', messages);
   if (!base) return null;
+  const candidate = standardItem(base.id);
+  const std = candidate?.kind === 'finger' ? candidate : undefined;
   const needDerive = !isPos(v['stopHeight']) || !isPos(v['bodyDepth']) || !isPos(v['height']);
   const d = needDerive ? deriveFingerParams(base.points) : null;
   if (d) forward(messages, d.messages, 'fingers', base.id);
   const { points, ...rest } = base;
-  return {
+  return withCurrentStandardStock({
     kind: 'finger', ...rest,
     profile: { points },
     height: pos(v['height'], d ? d.height : 0),
@@ -152,7 +244,7 @@ export function migrateFinger(v: unknown, index: number, messages: Message[]): F
     stopHeight: pos(v['stopHeight'], d ? d.stopHeight : 20),
     bodyDepth: pos(v['bodyDepth'], d ? d.bodyDepth : 60),
     width: pos(v['width'], 30),
-  };
+  }, std);
 }
 
 export function migrateMaterial(v: unknown, index: number, messages: Message[]): Material | null {
@@ -275,10 +367,15 @@ export function mergeLibraries(base: ToolLibrary, overlay: ToolLibrary): ToolLib
     for (const x of b) map.set(x.id, x);
     return [...map.values()];
   };
+  const std = buildStandardLibrary();
+  const refresh = <T extends Tool>(items: T[], standards: T[]): T[] => {
+    const current = new Map(standards.map(item => [item.id, item]));
+    return items.map(item => withCurrentStandardStock(item, current.get(item.id)));
+  };
   return {
-    punches: merge(base.punches, overlay.punches),
-    dies: merge(base.dies, overlay.dies),
-    fingers: merge(base.fingers, overlay.fingers),
+    punches: refresh(merge(base.punches, overlay.punches), std.punches),
+    dies: refresh(merge(base.dies, overlay.dies), std.dies),
+    fingers: refresh(merge(base.fingers, overlay.fingers), std.fingers),
     materials: merge(base.materials, overlay.materials),
     machines: merge(base.machines, overlay.machines),
     version: LIBRARY_VERSION,
@@ -287,18 +384,24 @@ export function mergeLibraries(base: ToolLibrary, overlay: ToolLibrary): ToolLib
   };
 }
 
-/** Add every standard item missing from `lib` (new app versions ship new tools). */
+/** Add missing standards and refresh availability metadata on persisted same-id standards. */
 export function withStandardItems(lib: ToolLibrary): ToolLibrary {
   const std = buildStandardLibrary();
+  const fillTools = <T extends Tool>(have: T[], standard: T[]): T[] => {
+    const current = new Map(standard.map(item => [item.id, item]));
+    const refreshed = have.map(item => withCurrentStandardStock(item, current.get(item.id)));
+    const ids = new Set(refreshed.map(item => item.id));
+    return [...refreshed, ...standard.filter(item => !ids.has(item.id))];
+  };
   const fill = <T extends { id: string }>(have: T[], standard: T[]): T[] => {
-    const ids = new Set(have.map(x => x.id));
-    return [...have, ...standard.filter(x => !ids.has(x.id))];
+    const ids = new Set(have.map(item => item.id));
+    return [...have, ...standard.filter(item => !ids.has(item.id))];
   };
   return {
     ...lib,
-    punches: fill(lib.punches, std.punches),
-    dies: fill(lib.dies, std.dies),
-    fingers: fill(lib.fingers, std.fingers),
+    punches: fillTools(lib.punches, std.punches),
+    dies: fillTools(lib.dies, std.dies),
+    fingers: fillTools(lib.fingers, std.fingers),
     materials: fill(lib.materials, std.materials),
     machines: fill(lib.machines, std.machines),
   };

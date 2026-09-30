@@ -7,15 +7,16 @@ import { defaultMachine } from '../machine/default';
 import { straightPunch, gooseneckPunch, acutePunch, radiusPunch, hemmingPunch } from './punches';
 import { vDie, multiVDie, hemmingDie } from './dies';
 import { flatFinger, steppedFinger } from './fingers';
+import { motionXFactoryDies, motionXFactoryPunch, MOTIONX_PUNCH_ID } from './factory';
 
 /** Persistence schema version of ToolLibrary. */
-export const LIBRARY_VERSION = 1;
+export const LIBRARY_VERSION = 2;
 
 export const STANDARD_V_WIDTHS: readonly number[] = [6, 8, 10, 12, 16, 20, 25, 32, 40, 50, 63, 80];
 export const MULTI_V_WIDTHS: readonly [number, number, number, number] = [16, 22, 35, 50];
 
 export function standardPunches(): Punch[] {
-  return [
+  const referencePunches = [
     straightPunch({ tipRadius: 0.8, tipAngle: 88 }),
     straightPunch({ tipRadius: 0.2, tipAngle: 88 }),
     straightPunch({ tipRadius: 0.8, tipAngle: 85 }),
@@ -27,6 +28,7 @@ export function standardPunches(): Punch[] {
     radiusPunch({ radius: 10 }),
     hemmingPunch(),
   ];
+  return [motionXFactoryPunch(), ...referencePunches.map(punch => ({ ...punch, stockStatus: 'not-in-stock' as const }))];
 }
 
 export function standardDies(): Die[] {
@@ -35,7 +37,7 @@ export function standardDies(): Die[] {
   dies.push(vDie({ vWidth: 12, vAngle: 30 }), vDie({ vWidth: 16, vAngle: 30 }));
   for (let a = 0; a < 4; a++) dies.push(multiVDie({ vWidths: [...MULTI_V_WIDTHS], active: a }));
   dies.push(hemmingDie());
-  return dies;
+  return [...motionXFactoryDies(), ...dies.map(die => ({ ...die, stockStatus: 'not-in-stock' as const }))];
 }
 
 export function standardFingers(): Finger[] {
@@ -72,5 +74,7 @@ export function standardDieId(vWidth: number, vAngle = 88): string {
 }
 
 export const STANDARD_PUNCH_ID = 'std:punch-straight-88-r0.8';
+/** The real factory punch mounted by new/reset setups. */
+export const DEFAULT_PUNCH_ID = MOTIONX_PUNCH_ID;
 export const STANDARD_FINGER_ID = 'std:finger-flat';
 export const STANDARD_MATERIAL_ID = 'std:mild-steel';

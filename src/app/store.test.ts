@@ -8,8 +8,19 @@ import { currentStepIndex, useSimStore } from '../sim/store';
 import { bendOrderIds, createProjectStore, selectMachine, selectMachineMessages, selectMaterial, selectSetupMessages } from './store';
 import { parseProject, programToCsv, programToJson, serializeProject } from './project';
 import { fmt, fmtForce, kNToTonnes, parseNumberList } from './format';
+import { buildStandardLibrary, MOTIONX_DIE_SLOT_IDS, MOTIONX_PUNCH_ID } from '../core/tools';
 
 function makeStore() {
+  const shipped = buildStandardLibrary();
+  const reference = {
+    ...shipped,
+    punches: shipped.punches.filter(punch => !punch.id.startsWith('std:motionx-')).map(punch => ({ ...punch, stockStatus: 'in-stock' as const })),
+    dies: shipped.dies.filter(die => !die.id.startsWith('std:motionx-')).map(die => ({ ...die, stockStatus: 'in-stock' as const })),
+  };
+  return createProjectStore({ libraryStore: new LibraryStore({ initial: reference, storage: null, fetch: null }), useWorker: false, language: 'en' });
+}
+
+function makeProductionStore() {
   return createProjectStore({ libraryStore: new LibraryStore({ storage: null, fetch: null }), useWorker: false, language: 'en' });
 }
 
@@ -97,6 +108,20 @@ describe('project store — part editing', () => {
 });
 
 describe('project store — tools and machine', () => {
+  it('starts production projects with the real bounded factory tooling', () => {
+    const store = makeProductionStore();
+    const station = store.getState().project.setup.stations[0]!;
+    expect(station.punchId).toBe(MOTIONX_PUNCH_ID);
+    expect(station.dieId).toBe(MOTIONX_DIE_SLOT_IDS[1]);
+    expect(station.zStart).toBe(317.5);
+    expect(station.zEnd).toBe(2782.5);
+    expect(station.segments.reduce((total, segment) => total + segment, 0)).toBe(2465);
+    expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
+      'warnings.setup.controllerCadGeometryMismatch',
+      'warnings.setup.dieLengthUnverified',
+    ]);
+  });
+
   it('starts with the default setup and validates changes', () => {
     const store = makeStore();
     const s = store.getState();
@@ -357,6 +382,26 @@ describe('project store — files', () => {
     expect(() => parseProject('nope', { machineId: 'a', materialId: 'b' })).toThrow();
     expect(() => parseProject('{"app":"other"}', { machineId: 'a', materialId: 'b' })).toThrow();
     expect(() => other.getState().loadProject('{"version": 99, "part": null}')).toThrow();
+  });
+
+  it('reopens a saved program as stale when its formerly stocked tools are now unavailable', async () => {
+    const legacy = makeStore();
+    legacy.getState().loadFlat(loadTruth('L-bracket').flat);
+    await legacy.getState().plan();
+    expect(legacy.getState().project.program?.feasible).toBe(true);
+    const saved = serializeProject(legacy.getState().project, legacy.getState().library);
+
+    const current = makeProductionStore();
+    current.getState().loadProject(saved);
+    expect(current.getState().project.program).not.toBeNull();
+    expect(current.getState().programStale).toBe(true);
+    expect(selectSetupMessages(current.getState()).filter(message => message.key === 'warnings.setup.toolNotInStock')).toHaveLength(2);
+
+    const reopened = parseProject(current.getState().saveProject(), {
+      machineId: current.getState().project.machineId,
+      materialId: current.getState().project.materialId,
+    });
+    expect(reopened.program).toBeNull();
   });
 
   it('exports the program as JSON and bilingual CSV', async () => {

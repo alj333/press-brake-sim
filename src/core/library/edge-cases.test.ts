@@ -73,10 +73,10 @@ describe('migrateLibrary — hostile values', () => {
     expect(unknownStd.family).toBe('custom'); expect(unknownStd.source).toBe('standard');
   });
 
-  it('version handling: 1 → silent, 0 → info, 2 (newer app) → warning; revision floor', () => {
-    expect(migrateLibraryDetailed({ version: 1 }).messages).toEqual([]);
-    expect(migrateLibraryDetailed({ version: 0 }).messages[0]).toMatchObject({ key: 'warnings.library.migrated', severity: 'info' });
-    expect(migrateLibraryDetailed({ version: 2 }).messages[0]).toMatchObject({ key: 'warnings.library.migrated', severity: 'warning', params: { from: 2, to: LIBRARY_VERSION } });
+  it('version handling: current → silent, older → info, newer → warning; revision floor', () => {
+    expect(migrateLibraryDetailed({ version: LIBRARY_VERSION }).messages).toEqual([]);
+    expect(migrateLibraryDetailed({ version: Math.max(0, LIBRARY_VERSION - 1) }).messages[0]).toMatchObject({ key: 'warnings.library.migrated', severity: 'info' });
+    expect(migrateLibraryDetailed({ version: LIBRARY_VERSION + 1 }).messages[0]).toMatchObject({ key: 'warnings.library.migrated', severity: 'warning', params: { from: LIBRARY_VERSION + 1, to: LIBRARY_VERSION } });
     expect(migrateLibraryDetailed({ revision: 3.7 }).library.revision).toBe(3);
     expect(migrateLibraryDetailed({ revision: '5' }).library.revision).toBe(0);
     for (const bad of [null, [], 'x', 42]) expect(() => migrateLibraryDetailed(bad)).toThrow(TypeError);
@@ -100,6 +100,86 @@ describe('migrateLibrary — hostile values', () => {
     expect(back.library.punches[0]).toEqual(p);
     expect(back.library.dies[0]).toEqual(d);
     expect(back.library.fingers[0]).toEqual(f);
+  });
+
+  it('round-trips valid custom stock metadata and sanitizes malformed explicit values safely', () => {
+    const customPunch = {
+      ...std.punches[0]!, id: 'custom:stocked-punch', source: 'custom' as const,
+      stockStatus: 'in-stock' as const,
+      segmentInventory: [{ length: 835, quantity: 1 }, { length: 100, quantity: 3 }],
+      physicalToolId: ' punch-set-1 ',
+    };
+    const customDie = {
+      ...std.dies[0]!, id: 'custom:slotted-die', source: 'custom' as const,
+      stockStatus: 'not-in-stock' as const,
+      physicalToolId: 'die-block-1', slotNumber: ' 04 ', slotPosition: ' front ',
+    };
+    const { library } = migrateLibraryDetailed({ version: LIBRARY_VERSION, punches: [customPunch], dies: [customDie] });
+    expect(library.punches[0]).toMatchObject({
+      stockStatus: 'in-stock',
+      segmentInventory: [{ length: 835, quantity: 1 }, { length: 100, quantity: 3 }],
+      physicalToolId: 'punch-set-1',
+    });
+    expect(library.dies[0]).toMatchObject({
+      stockStatus: 'not-in-stock', physicalToolId: 'die-block-1', slotNumber: '04', slotPosition: 'front',
+    });
+
+    const malformed = migrateLibraryDetailed({
+      version: 1,
+      punches: [{
+        ...customPunch, id: 'custom:malformed', stockStatus: 'warehouse', physicalToolId: '   ',
+        segmentInventory: [{ length: 100, quantity: 2 }, { length: -10, quantity: 1 }, { length: 50, quantity: 1.5 }, null],
+      }],
+      dies: [{ ...customDie, id: 'custom:empty-stock', segmentInventory: 'many', slotNumber: '', slotPosition: 4 }],
+    }).library;
+    expect(malformed.punches[0]).toMatchObject({ stockStatus: 'not-in-stock', segmentInventory: [{ length: 100, quantity: 2 }] });
+    expect(malformed.punches[0]).not.toHaveProperty('physicalToolId');
+    expect(malformed.dies[0]!.segmentInventory).toEqual([]);
+    expect(malformed.dies[0]).not.toHaveProperty('slotNumber');
+    expect(malformed.dies[0]).not.toHaveProperty('slotPosition');
+
+    const hostile = migrateLibraryDetailed({
+      punches: [{ ...customPunch, id: 'custom:huge-inventory', segmentInventory: [{ length: 10, quantity: Number.MAX_SAFE_INTEGER }] }],
+    }).library.punches[0]!;
+    expect(hostile.segmentInventory).toEqual([]);
+  });
+
+  it('refreshes current stock metadata for persisted same-id standards without discarding other edits', () => {
+    const currentPunch = std.punches[0]!;
+    const stalePunch = {
+      ...currentPunch,
+      name: 'Operator label',
+      stockStatus: currentPunch.stockStatus === 'not-in-stock' ? 'in-stock' as const : 'not-in-stock' as const,
+      segmentInventory: [{ length: 1, quantity: 99 }],
+      physicalToolId: 'stale-physical-id',
+    };
+    const currentDie = std.dies[0]!;
+    const staleDie = {
+      ...currentDie,
+      stockStatus: currentDie.stockStatus === 'not-in-stock' ? 'in-stock' as const : 'not-in-stock' as const,
+      segmentInventory: [{ length: 2, quantity: 88 }],
+      physicalToolId: 'stale-die-id', slotNumber: 'stale-slot', slotPosition: 'stale-position',
+    };
+
+    const migrated = migrateLibraryDetailed({ version: 1, punches: [stalePunch], dies: [staleDie] }).library;
+    expect(migrated.punches[0]!.name).toBe('Operator label');
+    expect(migrated.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
+    expect(migrated.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
+    expect(migrated.punches[0]!.physicalToolId).toBe(currentPunch.physicalToolId);
+    expect(migrated.dies[0]!.stockStatus).toBe(currentDie.stockStatus);
+    expect(migrated.dies[0]!.segmentInventory).toEqual(currentDie.segmentInventory);
+    expect(migrated.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
+    expect(migrated.dies[0]!.slotNumber).toBe(currentDie.slotNumber);
+    expect(migrated.dies[0]!.slotPosition).toBe(currentDie.slotPosition);
+
+    const merged = mergeLibraries(std, { ...std, punches: [stalePunch], dies: [staleDie] });
+    expect(merged.punches[0]!.name).toBe('Operator label');
+    expect(merged.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
+    expect(merged.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
+    expect(merged.dies[0]!.slotNumber).toBe(currentDie.slotNumber);
+    const filled = withStandardItems({ ...merged, punches: [stalePunch], dies: [staleDie] });
+    expect(filled.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
+    expect(filled.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
   });
 
   it('mergeLibraries keeps base order, appends overlay-only items, and withStandardItems is idempotent', () => {
@@ -170,7 +250,9 @@ describe('LibraryStore — failure modes', () => {
     expect(() => s.importJson('[]')).toThrow(TypeError);
     // an import with nothing in it changes nothing but the timestamp
     const before = s.get();
-    expect(s.importJson('{"version":1}')).toEqual([]);
+    expect(s.importJson('{"version":1}')).toEqual([
+      { key: 'warnings.library.migrated', severity: 'info', params: { from: 1, to: LIBRARY_VERSION } },
+    ]);
     expect(s.get().punches).toEqual(before.punches);
   });
 });

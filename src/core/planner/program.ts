@@ -22,6 +22,12 @@ import type { PlacementDetails } from './placement';
 export const RETRACT_MARGIN = 20;
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
+const loadPercent = (value: number | null): number | null => value === null
+  ? null
+  : Number.isFinite(value) ? Math.round(value * 10) / 10 : value;
+const dieOperatorName = (die: StationInfo['die']): string => die.slotNumber
+  ? `${die.name} · ID ${die.slotNumber}`
+  : die.name;
 
 function nowMs(): number {
   return typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
@@ -79,7 +85,7 @@ export function buildBendStep(ctx: PlanContext, ev: Evaluation, index: number, e
     bendId: b.id,
     stationId: st.station.id,
     punchId: st.punch.id, dieId: st.die.id,
-    punchName: st.punch.name, dieName: st.die.name,
+    punchName: st.punch.name, dieName: dieOperatorName(st.die),
     placement: ev.details.placement,
     targetAngle: r2(m.formAngle),
     includedAngle: r2(180 - m.formAngle),
@@ -92,7 +98,7 @@ export function buildBendStep(ctx: PlanContext, ev: Evaluation, index: number, e
     ramUpperLimit: r2(lim.ramUpperLimit),
     force: r2(m.force),
     forcePerMeter: r2(m.forcePerMeter),
-    loadPercentOfTool: Number.isFinite(m.load.percentOfTool) ? Math.round(m.load.percentOfTool * 10) / 10 : m.load.percentOfTool,
+    loadPercentOfTool: loadPercent(m.load.percentOfTool),
     bendLength: r2(b.length),
     punchLength: r2(ev.station.punchLength),
     segments: ev.station.segments.slice(),
@@ -162,7 +168,7 @@ export function buildHemFlattenStep(ctx: PlanContext, pre: Evaluation, index: nu
     bendId: b.id,
     stationId: st.station.id,
     punchId: st.punch.id, dieId: st.die.id,
-    punchName: st.punch.name, dieName: st.die.name,
+    punchName: st.punch.name, dieName: dieOperatorName(st.die),
     placement: details.placement,
     targetAngle: 180, includedAngle: 0, springback: 0, overbendAngle: 180, loadedIncludedAngle: 0,
     actualInnerRadius: r2(ri),
@@ -170,7 +176,7 @@ export function buildHemFlattenStep(ctx: PlanContext, pre: Evaluation, index: nu
     pinchY: r2(st.punch.height + hemHeight),
     ramUpperLimit: r2(lim.ramUpperLimit),
     force: r2(hm.force), forcePerMeter: r2(hm.forcePerMeter),
-    loadPercentOfTool: Number.isFinite(hm.load.percentOfTool) ? Math.round(hm.load.percentOfTool * 10) / 10 : hm.load.percentOfTool,
+    loadPercentOfTool: loadPercent(hm.load.percentOfTool),
     bendLength: r2(b.length),
     punchLength: r2(analysis.punchLength), segments: analysis.segments.slice(), partZOffset: r2(details.placement.partZOffset),
     backgauge: [], gaugeContact: 'none',
@@ -216,7 +222,9 @@ export function planProgram(input: PlannerInput, signal?: AbortSignal, onProgres
     const key = `${msg.key}|${JSON.stringify(msg.params ?? {})}`;
     if (!seen.has(key)) { seen.add(key); warnings.push(msg); }
   }
-  const feasible = errors === 0 && steps.every(s => s.collisions.every(c => c.severity !== 'error'));
+  const feasible = errors === 0
+    && steps.every(s => s.collisions.every(c => c.severity !== 'error'))
+    && warnings.every(message => message.severity !== 'error');
   if (!feasible) warnings.push({ key: 'warnings.planner.infeasible', severity: 'error' });
   const maxForce = steps.reduce((m, s) => Math.max(m, s.force), 0);
   return {

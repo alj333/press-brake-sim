@@ -19,6 +19,11 @@ import type { Die, Punch, Tool, Vec2 } from '../types';
 
 const DEG = Math.PI / 180;
 const lib = buildStandardLibrary();
+const referenceLib = {
+  ...lib,
+  punches: lib.punches.filter(punch => !punch.id.startsWith('std:motionx-')).map(punch => ({ ...punch, stockStatus: 'in-stock' as const })),
+  dies: lib.dies.filter(die => !die.id.startsWith('std:motionx-')).map(die => ({ ...die, stockStatus: 'in-stock' as const })),
+};
 const machine = defaultMachine();
 
 /** Every generated profile must be a simple CCW polygon obeying its frame's extent rule. */
@@ -337,36 +342,36 @@ describe('parametric generators stay well-formed for odd parameters', () => {
 describe('default setup and checks — odd machines and loads', () => {
   it('a 48-inch bed (1219.2 mm) gets a station the pieces can compose exactly, and it validates', () => {
     const inch = { ...machine, bedLength: 1219.2, backgauge: { ...machine.backgauge, zMax: 1219.2 } };
-    const setup = defaultToolSetup(lib, inch, 2)!;
+    const setup = defaultToolSetup(referenceLib, inch, 2)!;
     const st = setup.stations[0]!;
     expect(st.zStart).toBe(0);
     expect(st.zEnd).toBeCloseTo(st.segments.reduce((a, b) => a + b, 0), 9);
     expect(st.zEnd).toBeLessThanOrEqual(1219.2);
     expect(st.zEnd).toBeGreaterThan(1200);
-    expect(validateSetup(setup, inch, lib)).toEqual([]);
+    expect(validateSetup(setup, inch, referenceLib)).toEqual([]);
   });
 
   it('a punch without sectional pieces gets one full-length piece; odd explicit ranges are clamped', () => {
-    const solid: Punch = { ...lib.punches[0]!, id: 'custom:solid', segmentLengths: [] };
-    const solidLib = { ...lib, punches: [solid] };
+    const solid: Punch = { ...referenceLib.punches[0]!, id: 'custom:solid', segmentLengths: [] };
+    const solidLib = { ...referenceLib, punches: [solid] };
     const setup = defaultToolSetup(solidLib, machine, 2)!;
     expect(setup.stations[0]!.segments).toEqual([]);
     expect(setup.stations[0]!.zEnd).toBe(3100);
     expect(validateSetup(setup, machine, solidLib)).toEqual([]);
-    const clamped = defaultToolSetup(lib, machine, 2, { zStart: -50, zEnd: 5000 })!;
+    const clamped = defaultToolSetup(referenceLib, machine, 2, { zStart: -50, zEnd: 5000 })!;
     expect(clamped.stations[0]!.zStart).toBe(0); expect(clamped.stations[0]!.zEnd).toBe(3100);
-    expect(defaultToolSetup(lib, machine, 2, { zStart: 500, zEnd: 500 })).toBeNull();
-    expect(defaultToolSetup(lib, machine, 2, { punchId: 'nope' })).toBeNull();
+    expect(defaultToolSetup(referenceLib, machine, 2, { zStart: 500, zEnd: 500 })).toBeNull();
+    expect(defaultToolSetup(referenceLib, machine, 2, { punchId: 'nope' })).toBeNull();
   });
 
-  it('falls back to a die of another angle when no 88° V die exists, never to hemming or multi-V', () => {
-    const only85: Die[] = lib.dies.filter(d => d.vAngle === 85 || d.family !== 'v');
-    const setup = defaultToolSetup({ punches: lib.punches, dies: only85 }, machine, 2)!;
+  it('falls back to another in-stock V angle and accepts a multi-V groove, but never a hemming die', () => {
+    const only85: Die[] = referenceLib.dies.filter(d => d.vAngle === 85 || d.family === 'hemming');
+    const setup = defaultToolSetup({ punches: referenceLib.punches, dies: only85 }, machine, 2)!;
     expect(setup.stations[0]!.dieId).toBe('std:die-v16-85');
-    expect(pickDieForThickness(lib.dies.filter(d => d.family !== 'v'), 2)).toBeUndefined();
-    expect(pickDieForThickness(lib.dies, 2, null)!.id).toBe('std:die-v16-88');
+    expect(pickDieForThickness(referenceLib.dies.filter(d => d.family === 'multi-v'), 2, null)!.id).toBe('std:die-multi-v16');
+    expect(pickDieForThickness(referenceLib.dies, 2, null)!.id).toBe('std:die-v16-88');
     expect(pickDieForThickness(only85, 2, null)!.id).toBe('std:die-v16-85');
-    expect(defaultToolSetup({ punches: lib.punches, dies: [hemmingDie()] }, machine, 2)).toBeNull();
+    expect(defaultToolSetup({ punches: referenceLib.punches, dies: [hemmingDie()] }, machine, 2)).toBeNull();
   });
 
   it('segmentsForLength: nothing available, too short, and non-multiples of 5', () => {
@@ -378,15 +383,26 @@ describe('default setup and checks — odd machines and loads', () => {
     for (const s of segs) expect(pieces).toContain(s);
   });
 
-  it('toolLoadCheck: NaN / Infinity loads fail, negative loads count as zero, unrated tools pass', () => {
-    const punch = lib.punches[0]!, die = lib.dies.find(d => d.id === 'std:die-v16-88')!;
+  it('toolLoadCheck: NaN / Infinity loads fail, negative loads count as zero, unrated tools are explicitly unknown', () => {
+    const punch = lib.punches.find(p => p.id === 'std:punch-straight-88-r0.8')!;
+    const die = lib.dies.find(d => d.id === 'std:die-v16-88')!;
     expect(toolLoadCheck(NaN, punch, die).ok).toBe(false);
     expect(toolLoadCheck(Infinity, punch, die)).toMatchObject({ ok: false, percentOfTool: Infinity });
     expect(toolLoadCheck(Infinity, punch, die).message?.key).toBe('warnings.tool.overload');
     expect(toolLoadCheck(-50, punch, die)).toMatchObject({ ok: true, percentOfTool: 0 });
     const unrated = { name: 'x', maxLoadPerMeter: 0 };
-    expect(toolLoadCheck(5000, unrated, unrated)).toMatchObject({ ok: true, percentOfTool: 0 });
+    expect(toolLoadCheck(5000, unrated, unrated)).toMatchObject({
+      ok: true,
+      percentOfTool: null,
+      message: { key: 'warnings.tool.loadUnverified', severity: 'warning' },
+    });
     expect(toolLoadCheck(Infinity, unrated, unrated).ok).toBe(false);
+    expect(toolLoadCheck(500, unrated, { ...die, maxLoadPerMeter: 100 })).toMatchObject({
+      ok: false,
+      percentOfTool: null,
+      limitingTool: die.name,
+      message: { key: 'warnings.tool.overload', severity: 'error' },
+    });
     // exactly at the rating is OK (not an overload), just above is not
     expect(toolLoadCheck(1000, punch, die).ok).toBe(true);
     expect(toolLoadCheck(1000.01, punch, die).ok).toBe(false);

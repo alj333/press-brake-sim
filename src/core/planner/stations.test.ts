@@ -95,6 +95,32 @@ describe('analyseStation', () => {
     expect((analysis.punchZ[0] + analysis.punchZ[1]) / 2).toBeCloseTo(zc, 6);
     expect(analysis.segments.reduce((a, b) => a + b, 0)).toBeCloseTo(analysis.punchLength, 9);
   });
+  it('bounded inventory never fabricates an unmounted segment for a station', () => {
+    const s = sampleSetup('tabbed-plate');
+    const punchId = s.setup.stations[0]!.punchId;
+    const library = {
+      ...s.library,
+      punches: s.library.punches.map(punch => punch.id === punchId
+        ? { ...punch, segmentInventory: [{ length: 20, quantity: 1 }, { length: 15, quantity: 1 }, { length: 10, quantity: 1 }] }
+        : punch),
+    };
+    const setup = {
+      ...s.setup,
+      stations: [{ ...s.setup.stations[0]!, segments: [20] }],
+    };
+    const ctx = createContext({ part: s.part, material: s.material, machine: s.machine, setup, library });
+    const b = ctx.bends[0]!;
+    const st = ctx.stations[0]!;
+    const folded = foldGeometry(s.part, {});
+    const details = computePlacementDetails(s.part, folded, b.id, b.link.parentFlangeId, st.station, ctx.t);
+    const pieces = partSilhouette(folded, details.placement.transform, ctx.t);
+    const maths = bendStationMaths(ctx, b, st);
+    const analysis = analyseStation(ctx, b, st, maths, details, pieces);
+    expect(analysis.segments).toEqual([20]);
+    expect(analysis.punchLength).toBe(20);
+    expect(analysis.tooShort).toBe(true);
+    expect(analysis.warnings.map(message => message.key)).toContain('warnings.tool.tooShort');
+  });
   it('box B3 with the side walls standing: punch shorter than the bend line', () => {
     const { analysis, b } = analyse('box-4-flange', 'B3', ['B2', 'B4'], 'child');
     expect(analysis.punchLength).toBeLessThan(192);

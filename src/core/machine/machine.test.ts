@@ -6,8 +6,14 @@ import { defaultMachine, machineLevels } from './default';
 import { validateMachine, validateSetup } from './validate';
 import { machineObstacles } from './obstacles';
 import type { Machine, ToolSetup } from '../types';
+import { MOTIONX_DIE_SLOT_IDS, MOTIONX_PUNCH_ID } from '../tools/factory';
 
 const lib = buildStandardLibrary();
+const availableLib = {
+  ...lib,
+  punches: lib.punches.map(punch => ({ ...punch, stockStatus: 'in-stock' as const })),
+  dies: lib.dies.map(die => ({ ...die, stockStatus: 'in-stock' as const })),
+};
 
 function setup(overrides: Partial<ToolSetup['stations'][number]> = {}, machineId = 'std:machine-generic-100t'): ToolSetup {
   return {
@@ -56,29 +62,76 @@ describe('validateSetup', () => {
   const m = defaultMachine();
 
   it('accepts a good single-station setup', () => {
-    expect(validateSetup(setup(), m, lib)).toEqual([]);
-    expect(validateSetup(setup({ segments: [] }), m, lib)).toEqual([]);
-    expect(validateSetup(setup({ segments: [415, 300, 100, 20] }), m, lib)).toEqual([]);
+    expect(validateSetup(setup(), m, availableLib)).toEqual([]);
+    expect(validateSetup(setup({ segments: [] }), m, availableLib)).toEqual([]);
+    expect(validateSetup(setup({ segments: [415, 300, 100, 20] }), m, availableLib)).toEqual([]);
   });
 
   it('reports unknown tools, bed overflow, overlap, segment mismatch and stack', () => {
-    expect(validateSetup(setup({ punchId: 'std:nope' }), m, lib).map(x => x.key)).toContain('warnings.setup.unknownTool');
-    expect(validateSetup(setup({ zEnd: 3200 }), m, lib).map(x => x.key)).toContain('warnings.setup.stationOutsideBed');
-    expect(validateSetup(setup({ zStart: 100, zEnd: 50 }), m, lib).map(x => x.key)).toContain('warnings.setup.stationReversed');
-    expect(validateSetup(setup({ segments: [835, 100] }), m, lib).map(x => x.key)).toContain('warnings.setup.segmentsMismatch');
-    const odd = validateSetup(setup({ segments: [800, 35] }), m, lib);
+    expect(validateSetup(setup({ punchId: 'std:nope' }), m, availableLib).map(x => x.key)).toContain('warnings.setup.unknownTool');
+    expect(validateSetup(setup({ zEnd: 3200 }), m, availableLib).map(x => x.key)).toContain('warnings.setup.stationOutsideBed');
+    expect(validateSetup(setup({ zStart: 100, zEnd: 50 }), m, availableLib).map(x => x.key)).toContain('warnings.setup.stationReversed');
+    expect(validateSetup(setup({ segments: [835, 100] }), m, availableLib).map(x => x.key)).toContain('warnings.setup.segmentsMismatch');
+    const odd = validateSetup(setup({ segments: [800, 35] }), m, availableLib);
     expect(odd.filter(x => x.key === 'warnings.setup.segmentNotAvailable')).toHaveLength(2);
     const two: ToolSetup = { machineId: m.id, stations: [setup().stations[0]!, { ...setup().stations[0]!, id: 'S2', zStart: 800, zEnd: 1600, segments: [] }] };
-    expect(validateSetup(two, m, lib).map(x => x.key)).toContain('warnings.setup.stationsOverlap');
+    expect(validateSetup(two, m, availableLib).map(x => x.key)).toContain('warnings.setup.stationsOverlap');
     const dup: ToolSetup = { machineId: m.id, stations: [setup().stations[0]!, { ...setup().stations[0]!, zStart: 1000, zEnd: 1500, segments: [] }] };
-    expect(validateSetup(dup, m, lib).map(x => x.key)).toContain('warnings.setup.duplicateStation');
+    expect(validateSetup(dup, m, availableLib).map(x => x.key)).toContain('warnings.setup.duplicateStation');
     const mixed: ToolSetup = { machineId: m.id, stations: [setup().stations[0]!, { ...setup().stations[0]!, id: 'S2', dieId: 'std:die-v50-88', zStart: 1000, zEnd: 1500, segments: [] }] };
-    expect(validateSetup(mixed, m, lib).map(x => x.key)).toContain('warnings.setup.mixedDieHeights');
-    const tall = validateSetup(setup(), { ...m, daylight: 230 }, lib);
+    expect(validateSetup(mixed, m, availableLib).map(x => x.key)).toContain('warnings.setup.mixedDieHeights');
+    const tall = validateSetup(setup(), { ...m, daylight: 230 }, availableLib);
     expect(tall.map(x => x.key)).toContain('warnings.setup.stackTooTall');
-    expect(validateSetup({ machineId: m.id, stations: [] }, m, lib).map(x => x.key)).toEqual(['warnings.setup.noStations']);
-    expect(validateSetup(setup({}, 'other'), m, lib).map(x => x.key)).toContain('warnings.setup.machineMismatch');
-    expect(validateSetup(setup(), { ...m, backgauge: { ...m.backgauge, fingerId: 'x' } }, lib).map(x => x.key)).toContain('warnings.setup.unknownFinger');
+    expect(validateSetup({ machineId: m.id, stations: [] }, m, availableLib).map(x => x.key)).toEqual(['warnings.setup.noStations']);
+    expect(validateSetup(setup({}, 'other'), m, availableLib).map(x => x.key)).toContain('warnings.setup.machineMismatch');
+    expect(validateSetup(setup(), { ...m, backgauge: { ...m.backgauge, fingerId: 'x' } }, availableLib).map(x => x.key)).toContain('warnings.setup.unknownFinger');
+    const unavailable = validateSetup(setup(), m, lib).filter(message => message.key === 'warnings.setup.toolNotInStock');
+    expect(unavailable).toHaveLength(2);
+  });
+
+  it('enforces the finite factory punch quantities', () => {
+    const actual = setup({
+      punchId: MOTIONX_PUNCH_ID,
+      dieId: MOTIONX_DIE_SLOT_IDS[1],
+      zEnd: 1670,
+      segments: [835, 835],
+    });
+    const actualMessages = validateSetup(actual, m, lib);
+    expect(actualMessages.filter(message => message.key === 'warnings.setup.controllerCadGeometryMismatch')).toHaveLength(1);
+    expect(actualMessages.find(message => message.key === 'warnings.setup.controllerCadGeometryMismatch')).toMatchObject({
+      severity: 'warning',
+      params: { stationId: 'S1', slotNumber: '1', controllerV: 16, cadV: 20 },
+    });
+    expect(actualMessages.filter(message => message.severity === 'error')).toEqual([]);
+    expect(actualMessages.map(message => message.key)).toContain('warnings.setup.dieLengthUnverified');
+    const tooMany = setup({
+      punchId: MOTIONX_PUNCH_ID,
+      dieId: MOTIONX_DIE_SLOT_IDS[1],
+      zEnd: 2505,
+      segments: [835, 835, 835],
+    });
+    expect(validateSetup(tooMany, m, lib).map(message => message.key)).toContain('warnings.setup.segmentQuantityExceeded');
+    expect(validateSetup({ ...actual, stations: [{ ...actual.stations[0]!, segments: [] }] }, m, lib).map(message => message.key)).toContain('warnings.setup.segmentInventoryRequired');
+
+    const sharedAcrossStations: ToolSetup = {
+      machineId: m.id,
+      stations: [
+        { ...actual.stations[0]!, id: 'S1', zStart: 0, zEnd: 1670, segments: [835, 835] },
+        { ...actual.stations[0]!, id: 'S2', zStart: 1800, zEnd: 2635, segments: [835] },
+      ],
+    };
+    expect(validateSetup(sharedAcrossStations, m, lib).map(message => message.key)).toContain('warnings.setup.segmentQuantityExceeded');
+
+    const differentGroovesAtOnce: ToolSetup = {
+      machineId: m.id,
+      stations: [
+        { ...actual.stations[0]!, id: 'S1', zStart: 0, zEnd: 835, segments: [835] },
+        { ...actual.stations[0]!, id: 'S2', dieId: MOTIONX_DIE_SLOT_IDS[2], zStart: 1000, zEnd: 1300, segments: [300] },
+      ],
+    };
+    expect(validateSetup(differentGroovesAtOnce, m, lib)).toContainEqual(expect.objectContaining({
+      key: 'warnings.setup.physicalDieSlotConflict', severity: 'error', params: { slots: '1/2' },
+    }));
   });
 });
 

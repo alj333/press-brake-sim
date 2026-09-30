@@ -76,6 +76,26 @@ describe('feasibility setup advisor', () => {
     expect(verified.steps.flatMap(step => step.collisions.filter(collision => collision.severity === 'error'))).toEqual([]);
   }, 30_000);
 
+  it('never promotes an unavailable reference tool as a stocked solution', () => {
+    const input = inputFor('hat-channel');
+    const unavailable = vDie(
+      { vWidth: 16, vAngle: 88, shoulderRadius: 1.5, bodyWidth: 48, height: 60 },
+      {
+        id: 'custom:unavailable-v16-narrow',
+        name: 'Unavailable V16 narrow body 48',
+        source: 'custom',
+        maxLoadPerMeter: 300,
+      },
+    );
+    unavailable.stockStatus = 'not-in-stock';
+    input.library = { ...input.library, dies: [...input.library.dies, unavailable] };
+    const baseline = planProgram(input);
+    const report = recommendSetups(input, baseline);
+
+    expect(report.noLibrarySolution).toBe(true);
+    expect(report.recommendations.flatMap(recommendation => recommendation.changes).some(change => change.toId === unavailable.id)).toBe(false);
+  }, 30_000);
+
   it('finds a paired acute punch and die when neither one-tool change can solve the angle', () => {
     const input = inputFor('acute-bracket');
     const baseline = planProgram(input);

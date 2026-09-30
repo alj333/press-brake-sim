@@ -8,13 +8,16 @@ import { create } from 'zustand';
 import type { StoreApi, UseBoundStore } from 'zustand';
 import type {
   BendDirection, BendLine, BendProgram, BendStep, CollisionReport, FlatPattern, Language, Machine, Material, Message, PartModel,
-  PlannerOptions, Project, RecognizedSheet, ToolLibrary, ToolSetup, ToolStation, TriangleMesh, Vec2,
+  PlannerOptions, Project, Punch, RecognizedSheet, ToolLibrary, ToolSetup, ToolStation, TriangleMesh, Vec2,
 } from '../core/types';
 import { ImportError, defaultInnerRadius, importFile, splitFileName } from '../core/import';
 import type { DxfUnits, MeshUnits } from '../core/import';
 import { matchToDxf, recognizeSheet } from '../core/import/recognize';
 import { buildPartModel } from '../core/part';
-import { STANDARD_MATERIAL_ID, buildStandardLibrary, defaultToolSetup, newCustomId, segmentsForLength } from '../core/tools';
+import {
+  STANDARD_MATERIAL_ID, availableSegmentLengths, buildStandardLibrary, defaultToolSetup,
+  hasBoundedSegmentInventory, newCustomId, segmentsForLength,
+} from '../core/tools';
 import { defaultMachine, validateMachine, validateSetup } from '../core/machine';
 import { LibraryStore, findMachine, findMaterial } from '../core/library';
 import type { LibraryItem } from '../core/library';
@@ -300,13 +303,25 @@ function patchBend(b: BendLine, patch: BendPatch): BendLine {
   return out;
 }
 
-function stationSegments(punchSegments: readonly number[], length: number): number[] {
-  const pieces = punchSegments.filter(l => l > 0 && l <= 835);
-  const available = pieces.length > 0 ? pieces : punchSegments.filter(l => l > 0);
+function stationSegments(
+  punch: Pick<Punch, 'segmentLengths' | 'segmentInventory'>,
+  length: number,
+  alreadyMounted: readonly number[] = [],
+): number[] {
+  const bounded = hasBoundedSegmentInventory(punch);
+  const inventory = availableSegmentLengths(punch);
+  if (bounded) {
+    for (const used of alreadyMounted) {
+      const index = inventory.findIndex(piece => Math.abs(piece - used) < 1e-9);
+      if (index >= 0) inventory.splice(index, 1);
+    }
+  }
+  const pieces = inventory.filter(piece => piece > 0 && (bounded || piece <= 835));
+  const available = pieces.length > 0 ? pieces : inventory.filter(piece => piece > 0);
   if (available.length === 0 || !(length > 0)) return [];
-  const segs = segmentsForLength(length, available);
+  const segs = segmentsForLength(length, available, !bounded);
   const sum = segs.reduce((a, b) => a + b, 0);
-  return Math.abs(sum - length) <= 0.5 ? segs : [];
+  return bounded || Math.abs(sum - length) <= 0.5 ? segs : [];
 }
 
 function isAbortError(err: unknown): boolean {
@@ -684,10 +699,13 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
         const punchId = def?.stations[0]?.punchId ?? s.library.punches[0]?.id ?? '';
         const dieId = def?.stations[0]?.dieId ?? s.library.dies[0]?.id ?? '';
         const punch = s.library.punches.find(p => p.id === punchId);
+        const alreadyMounted = s.project.setup.stations
+          .filter(item => item.punchId === punchId)
+          .flatMap(item => item.segments);
         const station: ToolStation = {
           id: nextId('S', s.project.setup.stations.map(x => x.id)),
           punchId, dieId, zStart, zEnd,
-          segments: punch ? stationSegments(punch.segmentLengths, zEnd - zStart) : [],
+          segments: punch ? stationSegments(punch, zEnd - zStart, alreadyMounted) : [],
           punchFlipped: false, dieFlipped: false,
         };
         set(st => ({ project: { ...st.project, setup: { ...st.project.setup, stations: [...st.project.setup.stations, station] } } }));
@@ -703,7 +721,10 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
           const punchChanged = patch.punchId !== undefined && patch.punchId !== st.punchId;
           if (patch.segments === undefined && (punchChanged || rangeChanged)) {
             const punch = s.library.punches.find(p => p.id === next.punchId);
-            next.segments = punch ? stationSegments(punch.segmentLengths, next.zEnd - next.zStart) : [];
+            const alreadyMounted = s.project.setup.stations
+              .filter(item => item.id !== id && item.punchId === next.punchId)
+              .flatMap(item => item.segments);
+            next.segments = punch ? stationSegments(punch, next.zEnd - next.zStart, alreadyMounted) : [];
           }
           return next;
         });
@@ -716,7 +737,10 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
         const st = s.project.setup.stations.find(x => x.id === id);
         if (!st) return;
         const punch = s.library.punches.find(p => p.id === st.punchId);
-        get().updateStation(id, { segments: punch ? stationSegments(punch.segmentLengths, st.zEnd - st.zStart) : [] });
+        const alreadyMounted = s.project.setup.stations
+          .filter(item => item.id !== id && item.punchId === st.punchId)
+          .flatMap(item => item.segments);
+        get().updateStation(id, { segments: punch ? stationSegments(punch, st.zEnd - st.zStart, alreadyMounted) : [] });
       },
 
       removeStation(id) {
@@ -892,6 +916,8 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
             machineAdopted = true;
           } else machineDiffers = !!next.program;
         }
+        const setupInvalidatesProgram = !!next.program && !!current && validateSetup(next.setup, current, library)
+          .some(message => message.severity === 'error' || message.key === 'warnings.setup.toolNotInStock');
         set({
           project: next,
           thickness: next.part?.flat.thickness ?? s.thickness,
@@ -899,7 +925,8 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
           importWarnings: next.part?.flat.warnings ?? [],
           importing: false, planning: false, planProgress: null,
           fixedOrder,
-          programStale: machineDiffers || orderDiffers, planError: null, selectedBendId: null, selectedStepIndex: next.program?.steps.length ? 0 : null,
+          programStale: machineDiffers || orderDiffers || setupInvalidatesProgram,
+          planError: null, selectedBendId: null, selectedStepIndex: next.program?.steps.length ? 0 : null,
         });
         if (next.language !== s.project.language) get().setLanguage(next.language);
         pushKeyframes(next.program, next.part);

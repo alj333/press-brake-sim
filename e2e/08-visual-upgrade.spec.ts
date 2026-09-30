@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { collectErrors, loadSample, openApp, plan, shot } from './helpers.ts';
+import { collectErrors, loadSample, openApp, plan, selectReferenceTooling, shot } from './helpers.ts';
 
 test('visual upgrade: focus mode, camera refit and bilingual legend keep the bend in view', async ({ page }) => {
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'box-4-flange');
+  await selectReferenceTooling(page);
   await plan(page, 4);
 
   const viewport = page.getByTestId('sim-viewport');
@@ -44,6 +45,7 @@ test('visual upgrade: hard collision exposes an exact 3D marker in every layout 
   const errors = collectErrors(page);
   await openApp(page);
   await loadSample(page, 'hat-channel');
+  await selectReferenceTooling(page);
   await plan(page, 4);
 
   const errorSteps: number[] = [];

@@ -75,7 +75,9 @@ function StepCard({ step, selected, dragging, disabled, onSelect, onDragStart, o
         <span className="k">{t('sequence.force')}</span>
         <span data-testid={`step-force-${step.index}`} data-force-kn={fmt(step.force, 3)}>
           <strong>{fmt(step.force, 1)} kN</strong> ({fmt(kNToTonnes(step.force), 2)} t) · {fmt(step.forcePerMeter, 0)} kN/m ·{' '}
-          <span className={step.loadPercentOfTool > 100 ? 'text-error' : step.loadPercentOfTool > 90 ? 'text-warn' : ''}>{fmt(step.loadPercentOfTool, 0)} % {t('sequence.ofTool')}</span>
+          {step.loadPercentOfTool === null
+            ? <span className="text-warn">{t('warnings.tool.loadUnverified', { tools: `${step.punchName} / ${step.dieName}` })}</span>
+            : <span className={step.loadPercentOfTool > 100 ? 'text-error' : step.loadPercentOfTool > 90 ? 'text-warn' : ''}>{fmt(step.loadPercentOfTool, 0)} % {t('sequence.ofTool')}</span>}
           {' · '}{t('sequence.orientation')}: {t(`faceUp.${step.orientation.faceUp}`)} / {step.orientation.backFlangeId}
         </span>
       </div>

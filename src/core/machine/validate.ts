@@ -2,6 +2,8 @@
  * Machine and tool-setup validation → Message[] (i18n keys, see docs/specs/tooling-machine.md §2).
  */
 import type { Machine, Message, ToolLibrary, ToolSetup } from '../types';
+import { MOTIONX_DIE_PHYSICAL_ID, motionXDieGeometryDiscrepancy } from '../tools/factory';
+import { availableSegmentLengths, hasBoundedSegmentInventory, isToolInStock } from '../tools/stock';
 
 export interface ValidateMachineOptions {
   /** Nominal tool stack used for the daylight/stroke inequalities (standard: 120 + 60). */
@@ -77,6 +79,8 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
   }
   const seen = new Set<string>();
   const dieHeights = new Set<number>();
+  const physicalDieSlots = new Map<string, Set<string>>();
+  const remainingPunchInventory = new Map<string, number[]>();
   for (const st of setup.stations) {
     if (seen.has(st.id)) out.push({ key: 'warnings.setup.duplicateStation', severity: 'error', params: { stationId: st.id } });
     seen.add(st.id);
@@ -84,16 +88,59 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
     const die = library.dies.find(d => d.id === st.dieId);
     if (!punch) out.push({ key: 'warnings.setup.unknownTool', severity: 'error', params: { stationId: st.id, toolId: st.punchId } });
     if (!die) out.push({ key: 'warnings.setup.unknownTool', severity: 'error', params: { stationId: st.id, toolId: st.dieId } });
+    if (punch && !isToolInStock(punch)) out.push({ key: 'warnings.setup.toolNotInStock', severity: 'warning', params: { stationId: st.id, tool: punch.name } });
+    if (die && !isToolInStock(die)) out.push({ key: 'warnings.setup.toolNotInStock', severity: 'warning', params: { stationId: st.id, tool: die.name } });
+    const geometryDiscrepancy = die ? motionXDieGeometryDiscrepancy(die) : null;
+    if (geometryDiscrepancy) {
+      out.push({
+        key: 'warnings.setup.controllerCadGeometryMismatch',
+        severity: 'warning',
+        params: {
+          stationId: st.id,
+          slotNumber: geometryDiscrepancy.slotNumber,
+          controllerV: geometryDiscrepancy.controller.vWidth,
+          controllerAngle: geometryDiscrepancy.controller.vAngle,
+          controllerRadius: geometryDiscrepancy.controller.shoulderRadius,
+          cadV: geometryDiscrepancy.cad.vWidth,
+          cadAngle: geometryDiscrepancy.cad.vAngle,
+          cadRadius: geometryDiscrepancy.cad.shoulderRadius,
+        },
+      });
+      out.push({
+        key: 'warnings.setup.dieLengthUnverified',
+        severity: 'warning',
+        params: { stationId: st.id, slotNumber: geometryDiscrepancy.slotNumber },
+      });
+    }
+    if (die?.physicalToolId && die.slotNumber) {
+      const slots = physicalDieSlots.get(die.physicalToolId) ?? new Set<string>();
+      slots.add(die.slotNumber);
+      physicalDieSlots.set(die.physicalToolId, slots);
+    }
     const length = st.zEnd - st.zStart;
     if (!(length > 0)) {
       out.push({ key: 'warnings.setup.stationReversed', severity: 'error', params: { stationId: st.id } });
     } else if (st.zStart < -1e-9 || st.zEnd > machine.bedLength + 1e-9) {
       out.push({ key: 'warnings.setup.stationOutsideBed', severity: 'error', params: { stationId: st.id, zStart: st.zStart, zEnd: st.zEnd, bedLength: machine.bedLength } });
     }
+    if (punch && hasBoundedSegmentInventory(punch) && st.segments.length === 0 && length > 0) {
+      out.push({ key: 'warnings.setup.segmentInventoryRequired', severity: 'error', params: { stationId: st.id } });
+    }
     if (st.segments.length > 0 && length > 0) {
       const sum = st.segments.reduce((a, b) => a + b, 0);
       if (Math.abs(sum - length) > 0.5) out.push({ key: 'warnings.setup.segmentsMismatch', severity: 'error', params: { stationId: st.id, sum, length } });
-      if (punch && punch.segmentLengths.length > 0) {
+      if (punch && hasBoundedSegmentInventory(punch)) {
+        let remaining = remainingPunchInventory.get(punch.id);
+        if (!remaining) {
+          remaining = availableSegmentLengths(punch);
+          remainingPunchInventory.set(punch.id, remaining);
+        }
+        for (const seg of st.segments) {
+          const index = remaining.findIndex(length => Math.abs(length - seg) < 1e-9);
+          if (index >= 0) remaining.splice(index, 1);
+          else out.push({ key: 'warnings.setup.segmentQuantityExceeded', severity: 'error', params: { stationId: st.id, length: seg } });
+        }
+      } else if (punch && punch.segmentLengths.length > 0) {
         for (const seg of st.segments) {
           if (!punch.segmentLengths.some(l => Math.abs(l - seg) < 1e-9)) {
             out.push({ key: 'warnings.setup.segmentNotAvailable', severity: 'warning', params: { stationId: st.id, length: seg } });
@@ -105,6 +152,15 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
       const stack = machine.table.holderHeight + die.height + punch.height;
       if (stack > machine.daylight) out.push({ key: 'warnings.setup.stackTooTall', severity: 'error', params: { stationId: st.id, stack, daylight: machine.daylight } });
       dieHeights.add(die.height);
+    }
+  }
+  for (const [physicalToolId, slots] of physicalDieSlots) {
+    if (physicalToolId === MOTIONX_DIE_PHYSICAL_ID && slots.size > 1) {
+      out.push({
+        key: 'warnings.setup.physicalDieSlotConflict',
+        severity: 'error',
+        params: { slots: [...slots].sort().join('/') },
+      });
     }
   }
   // pairwise overlap (every pair, so a station enclosing several others is reported against each)

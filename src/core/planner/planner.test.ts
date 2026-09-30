@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mat4 } from '../geom';
 import { buildPartModel, foldGeometry, flatState, bendPose, partBoundsFolded, partSilhouette } from '../part';
 import { punchTipY } from '../bend';
-import { vDie } from '../tools';
+import { buildStandardLibrary, defaultToolSetup, vDie } from '../tools';
 import { planProgram, defaultPlannerOptions, buildTimeline } from './index';
 import type { PlannerInput } from './index';
 import { makeBoxFlat, sampleSetup, stationSetup } from './test-helpers';
@@ -17,6 +17,36 @@ const flips = (p: BendProgram): number => p.steps.filter(s => s.manipulation.tur
 const errorCollisions = (p: BendProgram) => p.steps.flatMap(s => s.collisions.filter(c => c.severity === 'error'));
 
 describe('planProgram — samples', () => {
+  it('propagates the real die controller-to-A360-mesh warning into the program', () => {
+    const s = sampleSetup('L-bracket');
+    const library = buildStandardLibrary();
+    const setup = defaultToolSetup(library, s.machine, s.truth.thickness)!;
+    const program = planProgram({ ...inputOf(s), setup, library });
+    const warnings = program.warnings.filter(message => message.key === 'warnings.setup.controllerCadGeometryMismatch');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ severity: 'warning', params: { stationId: 'S1', slotNumber: '1' } });
+  });
+
+  it('never labels a program feasible when the physical punch inventory is exceeded', () => {
+    const s = sampleSetup('L-bracket');
+    const punchId = s.setup.stations[0]!.punchId;
+    const library = {
+      ...s.library,
+      punches: s.library.punches.map(punch => punch.id === punchId ? {
+        ...punch,
+        segmentInventory: [
+          { length: 10, quantity: 1 }, { length: 20, quantity: 1 },
+          { length: 50, quantity: 1 }, { length: 100, quantity: 1 },
+          { length: 415, quantity: 1 }, { length: 835, quantity: 2 },
+        ],
+      } : punch),
+    };
+    const program = planProgram({ ...inputOf(s), library });
+    expect(program.warnings.map(message => message.key)).toContain('warnings.setup.segmentQuantityExceeded');
+    expect(program.warnings.map(message => message.key)).toContain('warnings.planner.infeasible');
+    expect(program.feasible).toBe(false);
+  });
+
   it('L-bracket: one feasible step with the short leg rearward on the backgauge and the long leg toward the operator', () => {
     const s = sampleSetup('L-bracket');
     const p = planProgram(inputOf(s));

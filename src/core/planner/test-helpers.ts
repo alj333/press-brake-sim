@@ -25,7 +25,21 @@ export function stationSetup(machine: Machine, punchId: string, dieId: string, s
 
 export function sampleSetup(name: SampleName, tools?: { punchId: string; dieId: string }): SampleSetup {
   const truth = loadTruth(name);
-  const library = buildStandardLibrary();
+  const shipped = buildStandardLibrary();
+  // Golden fixtures deliberately exercise the historical reference-tool matrix. Production marks
+  // those tools unavailable, so make this test-only library explicit instead of silently relying
+  // on shop stock metadata.
+  const library: ToolLibrary = {
+    ...shipped,
+    punches: shipped.punches.map(punch => ({
+      ...punch,
+      stockStatus: punch.id.startsWith('std:motionx-') ? 'not-in-stock' as const : 'in-stock' as const,
+    })),
+    dies: shipped.dies.map(die => ({
+      ...die,
+      stockStatus: die.id.startsWith('std:motionx-') ? 'not-in-stock' as const : 'in-stock' as const,
+    })),
+  };
   const machine = defaultMachine();
   const material = library.materials.find(m => m.id === truth.material.id) ?? library.materials[0]!;
   const part = buildPartModel(truth.flat);
