@@ -40,7 +40,7 @@ Express 5 server for the shared tool library; Docker image for a Synology NAS.
   - Per step: station and V selection, included / loaded angle with springback and overbend, actual air-bend
     radius, ram depth, pinch and retract heights, force (kN / t) and % of tool rating, punch length / segments /
     part Z offset, per-finger backgauge X / R / Z and contact type, outside dimension + bend deduction with the
-    dimension reference (virtual sharp / tangent), orientation, turn between steps, bottoming flag.
+    dimension reference (virtual sharp / tangent), orientation, turn between steps, and low tool-angle-clearance flag.
   - Collision model: the folded part is swept through the bend against punch, clamp, ram, die, holder, table,
     fingers, backgauge beam and side frames; minimum-leg, tool-angle, daylight, stroke, tonnage and
     tool-load checks; hems expand into a pre-bend + a hem-flatten step on a hemming station.
@@ -323,8 +323,8 @@ included angle, `V` die opening, `Rm` tensile strength (MPa), `L` bend length (m
   solved so the outer leg line is tangent to it. `D(θi = 180) = −t` (tip on the sheet at the pinch point);
   `D ≥ −t`. `ramDepth = D + yCorrection`; ram Y (clamp bottom) `= punch.height − D`.
 - Tool angle: a bend is only feasible on a station whose punch tip angle and die V angle both fit inside the
-  loaded included angle; `bottoming` is flagged when `180 − overbend ≤ vAngle + 1` (every 90° bend on 88°
-  tools bottoms slightly — an information flag, not an error; 85° tools avoid it).
+  loaded included angle. When the tools physically fit but either angle has less than 1° clearance, the legacy
+  `bottoming` field carries a **low tool-angle clearance** information flag; a hard mismatch is a separate error.
 - Minimum leg (outside, to the virtual sharp) `Lmin = (V/2) / sin(θi_loaded / 2) + rs + 2`; below it the step is
   infeasible on that station, below `1.15 · Lmin` a warning.
 - V selection: the mounted die with V closest to `8·t` (t ≤ 3), `10·t` (3–6 mm), `12·t` (> 6 mm) among the

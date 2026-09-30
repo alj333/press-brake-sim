@@ -1,6 +1,6 @@
 /**
  * ui — Sequence panel: Plan button + options, program summary, and one draggable card per
- * step (tools, angles, backgauge, ram depth, force, turn, gauge contact, bottoming, messages
+ * step (tools, angles, backgauge, ram depth, force, turn, gauge contact, low angle clearance, messages
  * and collisions that seek the simulation). Dragging a card onto another fixes the order.
  */
 import { useState } from 'react';

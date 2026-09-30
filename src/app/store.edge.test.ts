@@ -192,7 +192,7 @@ describe('store — planning edge cases', () => {
     await store.getState().plan();
     let program = store.getState().project.program!;
     expect(program.feasible).toBe(false);
-    expect(program.steps[0]!.bottoming).toBe(true);
+    expect(program.steps[0]!.bottoming).toBe(false);
     expect(store.getState().notices.some(n => n.message.key === 'app.notice.plannedInfeasible')).toBe(true);
     store.getState().updateStation('S1', { punchId: 'std:punch-acute-30-r0.8', dieId: 'std:die-v12-30' });
     expect(store.getState().programStale).toBe(true);

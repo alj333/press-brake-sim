@@ -226,7 +226,7 @@ referentially stable per store state (memoised `Pick`).
   evaluated, time); program warnings; per step card (`data-testid="step-<index>"`, draggable):
   index, bend id, kind, station + punch / die names, `includedAngle → loadedIncludedAngle`
   (springback, overbend), per-finger X / R / Z, ram depth, force kN and t, % of tool, turn icon +
-  text, gauge contact, bottoming flag, warnings and collisions via `tm` — clicking a warning /
+  text, gauge contact, low tool-angle-clearance flag, warnings and collisions via `tm` — clicking a warning /
   collision seeks the sim to that step (collision: to the keyframe at its `atFraction`); clicking
   the card selects the step and seeks its start. Dragging a card onto another reorders →
   `setFixedOrder(newOrder)` → `plan()`; `Auto` clears the order and re-plans. e2e hooks on the

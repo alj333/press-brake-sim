@@ -110,7 +110,10 @@ export function buildBendStep(ctx: PlanContext, ev: Evaluation, index: number, e
     dimensionRef: ossb.ref,
     orientation: { faceUp: ev.details.placement.flipped ? 'bottom' : 'top', backFlangeId: ev.details.placement.gaugedFlangeId },
     manipulation: { turn: extras.turn, stationChange: extras.stationChange },
-    bottoming: !m.angleOk,
+    // Keep the legacy `bottoming` field for project compatibility, but only flag the
+    // low-clearance case. A tool that cannot physically reach the loaded angle is already a
+    // hard angle error and must not also be presented as a bottoming/clearance warning.
+    bottoming: m.angleFits && !m.angleOk,
     collisions: ev.sweep.collisions,
     warnings,
   };

@@ -509,9 +509,9 @@ export interface BendStep {
   orientation: { faceUp: 'top' | 'bottom'; backFlangeId: string };
   /** Part manipulation relative to the previous step. */
   manipulation: { turn: Turn; stationChange: boolean };
-  /** True when 180 − overbendAngle ≤ die.vAngle + 1 (sheet bottoms on the V faces). An information
-   *  flag (every standard 90° bend on 88° tools bottoms slightly); feasibility uses the physical
-   *  fit tipAngle ≤ loaded && vAngle ≤ loaded (see ARCHITECTURE "Tool angle feasibility"). */
+  /** Legacy field name: true only when both tools physically fit the loaded angle but either has
+   *  less than 1° clearance. A hard tool-angle mismatch leaves this false and is reported separately
+   *  by warnings.tool.angle (see ARCHITECTURE "Tool angle feasibility"). */
   bottoming: boolean;
   collisions: CollisionReport[];
   warnings: Message[];

@@ -154,7 +154,7 @@ export function createEvaluator(ctx: PlanContext, onEvaluate?: (count: number) =
       w.shortFlange * (legWarn + 2 * legErr) +
       w.collisionWarning * warningCollisions +
       m.vPreference +
-      (m.angleOk ? 0 : BOTTOMING_COST) +
+      (m.angleFits && !m.angleOk ? BOTTOMING_COST : 0) +
       gaugeQuality +
       STANDING_DOWN_COST * standingDown +
       HARD_ERROR_COST * hardErrors;

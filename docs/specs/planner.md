@@ -50,9 +50,11 @@ angleCorrection)`, `ramDepth(V, t, riActual, loadedIncludedAngle, rs, vAngle) + 
 loaded, rs)`, `vPreference = |V − recommendedV(t)| / recommendedV(t)` and two angle flags:
 - `angleFits` — the tools physically fit inside the loaded angle (`tipAngle ≤ loaded && vAngle ≤
   loaded`, no margin). False ⇒ `warnings.tool.angle` (error) and the step is infeasible;
-- `angleOk` — ARCHITECTURE's `toolAngleFeasible` with the 1° margin. False but fitting ⇒
-  `bottoming = true` + `warnings.tool.bottoming` (info) + a small cost (`BOTTOMING_COST` 0.5) so a
-  margin-safe station is preferred when mounted.
+- `angleOk` — ARCHITECTURE's `toolAngleFeasible` with the 1° margin. False but physically fitting ⇒
+  legacy `bottoming = true` (operator wording: **low tool-angle clearance**) +
+  `warnings.tool.bottoming` (info) + a small cost (`BOTTOMING_COST` 0.5) so a margin-safe station
+  is preferred when mounted. A hard mismatch leaves `bottoming = false` because
+  `warnings.tool.angle` already blocks the bend.
 
   (With the margin as a hard rule every 90° mild-steel bend on the standard 88° tools — the
   samples' own default setup — would be infeasible: loaded angle 88.29° < 89°. Reported as a
@@ -193,7 +195,7 @@ minLeg}`) → force vs capacity (`warnings.machine.capacity {force, capacity, pe
 > 100 %, warning > 90 %) and tool ratings (`toolLoadCheck` messages). Order-independent cost:
 
 `cost = shortFlange·(legWarnings + 2·legErrors) + collisionWarning·(warning collisions) +
-vPreference + 0.5·bottoming + gaugeQuality + 0.2·(flanges already bent that point below the
+vPreference + 0.5·lowAngleClearance + gaugeQuality + 0.2·(flanges already bent that point below the
 die plane) + 1e6·hardErrors`, with `gaugeQuality` =
 `GAUGE_WARNING_COST` (1) per radius / not-straight / no-contact gauge, `FINGER_OVER_DIE_COST`
 (0.75) for a finger skimming the die top and `SINGLE_FINGER_COST` (0.5) for a single-finger gauge.
@@ -237,7 +239,8 @@ sharp / tangent to what the fingers touch (the cut edge, a standing wall's outer
 for the U-channel base gauged against its first wall — or the radius extreme; the gauged
 flange's own extent when nothing is gauged) / `bendDeduction (drawing ri) / dimensionRef`;
 `orientation = { faceUp:
-flipped ? 'bottom' : 'top', backFlangeId: gaugedFlangeId }`; `manipulation`; `bottoming`;
+flipped ? 'bottom' : 'top', backFlangeId: gaugedFlangeId }`; `manipulation`; legacy `bottoming`
+(operator-facing low tool-angle clearance);
 `collisions`; `warnings` = evaluation warnings + `warnings.bend.radiusMismatch {bendId, drawing,
 actual, flangeError = ΔBA/2}` when `|riActual − ri| > max(0.25·t, 0.2·ri)` +
 `warnings.machine.daylight` (error for the insertion height — hard; warning when only the
@@ -293,7 +296,7 @@ the programmed `ramDepth` is the shop number `−(2t + gap)`). `foldState` = pre
 `warnings.planner.bendSkipped {bendId}`, `warnings.planner.noStation {bendId}`,
 `warnings.planner.infeasible`,
 `warnings.tool.angle {bendId, stationId, punchAngle, vAngle, loadedAngle}` (error),
-`warnings.tool.bottoming {…same}` (info), `warnings.tool.tooShort {bendId, stationId,
+`warnings.tool.bottoming {…same}` (info; operator-facing low tool-angle clearance), `warnings.tool.tooShort {bendId, stationId,
 stationLength, required}`, `warnings.tool.noHemmingStation {bendId}`,
 `warnings.bend.legTooShort {bendId, flangeId, outside, minLeg}`, `warnings.bend.legShort {…}`,
 `warnings.bend.radiusMismatch {bendId, drawing, actual, flangeError}`,

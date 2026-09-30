@@ -28,7 +28,7 @@ export interface BendStationMaths {
   springback: number;
   overbendAngle: number;
   loadedIncludedAngle: number;
-  /** toolAngleFeasible (with the 1° margin): false ⇒ bottoming. */
+  /** toolAngleFeasible (with the 1° margin): false ⇒ low tool-angle clearance or a hard mismatch. */
   angleOk: boolean;
   /** The tools physically fit inside the loaded angle (no margin): false ⇒ infeasible. */
   angleFits: boolean;

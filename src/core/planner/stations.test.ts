@@ -32,7 +32,7 @@ describe('bendStationMaths', () => {
     expect(Math.abs(maths.forcePerMeter - g.forcePerMeter) / g.forcePerMeter).toBeLessThan(0.02);
     expect(Math.abs(maths.force - g.force) / g.force).toBeLessThan(0.02);
     expect(maths.minLeg).toBeCloseTo(g.minLegOutside, 6);
-    // 88° tools with a loaded angle of 88.29°: they fit (feasible) but violate the 1° margin (bottoming)
+    // 88° tools with a loaded angle of 88.29°: they fit but have less than 1° angle clearance.
     expect(maths.angleFits).toBe(true);
     expect(maths.angleOk).toBe(false);
     expect(maths.load.percentOfTool).toBeCloseTo(14.91, 1);

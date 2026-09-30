@@ -25,6 +25,10 @@ describe('planProgram — samples', () => {
     const warnings = program.warnings.filter(message => message.key === 'warnings.setup.controllerCadGeometryMismatch');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({ severity: 'warning', params: { stationId: 'S1', slotNumber: '1' } });
+    expect(program.steps[0]!.warnings).toContainEqual(expect.objectContaining({
+      key: 'warnings.tool.angle', severity: 'error',
+    }));
+    expect(program.steps[0]!.bottoming).toBe(false);
   });
 
   it('never labels a program feasible when the physical punch inventory is exceeded', () => {
@@ -69,6 +73,10 @@ describe('planProgram — samples', () => {
     expect(Math.abs(st.force - g.force) / g.force).toBeLessThan(0.02);
     expect(st.includedAngle).toBe(90);
     expect(st.loadedIncludedAngle).toBeCloseTo(g.loadedIncludedAngle, 1);
+    expect(st.bottoming).toBe(true);
+    expect(st.warnings).toContainEqual(expect.objectContaining({
+      key: 'warnings.tool.bottoming', severity: 'info',
+    }));
     expect(st.actualInnerRadius).toBeCloseTo(g.actualInnerRadius, 2);
     expect(st.bendDeduction).toBeCloseTo(g.bendDeduction, 1);
     expect(st.dimensionRef).toBe('virtual-sharp');
@@ -203,7 +211,7 @@ describe('planProgram — samples', () => {
     expect(p.feasible).toBe(false);
     expect(p.steps.length).toBe(1);
     expect(p.steps[0]!.warnings.some(w => w.key === 'warnings.tool.angle' && w.severity === 'error')).toBe(true);
-    expect(p.steps[0]!.bottoming).toBe(true);
+    expect(p.steps[0]!.bottoming).toBe(false);
     const a = sampleSetup('acute-bracket', { punchId: 'std:punch-acute-30-r0.8', dieId: 'std:die-v12-30' });
     const p2 = planProgram(inputOf(a));
     expect(p2.feasible).toBe(true);

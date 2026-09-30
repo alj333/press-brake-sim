@@ -20,6 +20,8 @@ test('acute bracket: 88° tools are rejected, the acute station makes it feasibl
   await plan(page, 1);
   await expect(page.getByTestId('program-feasible')).toHaveText('Not feasible');
   await expect(page.getByTestId('step-0')).toContainText('do not fit the loaded angle');
+  await expect(page.getByTestId('step-0')).not.toContainText('Bottoming');
+  await expect(page.getByTestId('step-0')).not.toContainText('Low tool-angle clearance');
   await expect(page.getByTestId('step-angle-0')).toContainText('45°');
 
   // mount the acute tools on S1
@@ -52,6 +54,12 @@ test('editing a bend clears the program; the re-plan follows the new angle', asy
   await selectReferenceTooling(page);
   await plan(page, 1);
   await expect(page.getByTestId('step-angle-0')).toContainText('90°');
+  await expect(page.getByTestId('step-0')).toContainText('Low tool-angle clearance');
+  await expect(page.getByTestId('step-0')).toContainText('tool-angle clearance is less than 1°');
+  await page.getByTestId('language-toggle').click();
+  await expect(page.getByTestId('step-0')).toContainText('ระยะเผื่อมุมเครื่องมือน้อย');
+  await expect(page.getByTestId('step-0')).toContainText('ระยะเผื่อมุมเครื่องมือน้อยกว่า 1°');
+  await page.getByTestId('language-toggle').click();
 
   const angle = page.getByTestId('bend-angle-B1');
   await angle.fill('120');

@@ -85,9 +85,11 @@ L bend length (mm), rs die shoulder radius, β = vAngle/2.
 - Tool angle feasibility (hard constraint, the physical fit): `punch.tipAngle ≤ 180 − overbendAngle`
   and `die.vAngle ≤ 180 − overbendAngle`; a station failing it gets `warnings.tool.angle` (error)
   and if no mounted station passes the program is infeasible (e.g. the acute bracket or stainless
-  304 on 88° tools). The 1° margin is reported, not enforced: `bottoming = true` +
-  `warnings.tool.bottoming` (info, small cost) when `180 − overbendAngle ≤ die.vAngle + 1` — every
-  standard 90° bend in mild steel on 88° tools (loaded 88.29°) is such a case; 85° tools avoid it.
+  304 on 88° tools). When both tools physically fit but either has less than 1° clearance, the
+  compatibility field `bottoming = true` carries `warnings.tool.bottoming` (operator wording:
+  **low tool-angle clearance**, info, small cost). A hard mismatch leaves `bottoming = false` and
+  is represented only by the blocking angle error. A standard 90° bend in mild steel on 88° tools
+  (loaded 88.29°) is a low-clearance case; 85° tools avoid it.
   (`toolAngleFeasible` in `src/core/bend` still implements the strict +1° test for callers that
   want it.)
 - Minimum leg (both legs, outside dimension to the virtual sharp): the leg edge must stay on the
@@ -189,7 +191,8 @@ stays at X = 0 for every f, and at f = 0 the pose equals the placement. `punchTi
    punchLength/segments/partZOffset (the punch piece is centred in the station, the part placed
    relative to station.zStart), per-finger backgauge, gaugeContact, outside dimension +
    BD + dimensionRef (`gaugedFlangeOutside` = the caliper check dimension from this bend's virtual
-   sharp/tangent to the gauged edge or face), orientation words, manipulation, bottoming,
+   sharp/tangent to the gauged edge or face), orientation words, manipulation, the legacy
+   `bottoming` compatibility field (operator-facing low tool-angle clearance),
    collisions, warnings).
    `feasible` = no 'error' collisions, all forces ≤ capacity and tool ratings, angle-feasible,
    every leg ≥ Lmin, hems have a hemming station.
