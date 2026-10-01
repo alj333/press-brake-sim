@@ -6,7 +6,6 @@ import {
   MOTIONX_DIE_PHYSICAL_ID,
   motionXDieGeometryDiscrepancy,
   motionXPunchGeometryDiscrepancy,
-  motionXPunchRadiusEvidence,
 } from '../tools/factory';
 import { availableSegmentLengths, hasBoundedSegmentInventory, isToolInStock } from '../tools/stock';
 
@@ -102,20 +101,10 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
         severity: 'warning',
         params: {
           stationId: st.id,
-          confirmedAngle: punchGeometryDiscrepancy.calculation.tipAngle,
+          selectedAngle: punchGeometryDiscrepancy.calculation.tipAngle,
+          selectedRadius: punchGeometryDiscrepancy.calculation.tipRadius,
           cadAngle: punchGeometryDiscrepancy.cad.tipAngle,
-        },
-      });
-    }
-    const punchRadiusEvidence = punch ? motionXPunchRadiusEvidence(punch) : null;
-    if (punchRadiusEvidence) {
-      out.push({
-        key: 'warnings.setup.punchRadiusUnverified',
-        severity: 'warning',
-        params: {
-          stationId: st.id,
-          provisionalRadius: punchRadiusEvidence.provisionalRadius,
-          purchaseDrawingRadii: punchRadiusEvidence.purchaseDrawingRadii.map(radius => `R${radius}`).join(' / '),
+          cadRadius: punchGeometryDiscrepancy.cad.tipRadius,
         },
       });
     }

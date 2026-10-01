@@ -169,7 +169,7 @@ describe('migrateLibrary — hostile values', () => {
     expect(migrated.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
     expect(migrated.punches[0]!.physicalToolId).toBe(currentPunch.physicalToolId);
     expect(migrated.punches[0]!.tipAngle).toBe(86);
-    expect(migrated.punches[0]!.tipRadius).toBe(0.2);
+    expect(migrated.punches[0]!.tipRadius).toBe(0.6);
     expect(migrated.dies[0]!.stockStatus).toBe(currentDie.stockStatus);
     expect(migrated.dies[0]!.segmentInventory).toEqual(currentDie.segmentInventory);
     expect(migrated.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
@@ -181,32 +181,55 @@ describe('migrateLibrary — hostile values', () => {
     expect(merged.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
     expect(merged.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
     expect(merged.punches[0]!.tipAngle).toBe(86);
-    expect(merged.punches[0]!.tipRadius).toBe(0.2);
+    expect(merged.punches[0]!.tipRadius).toBe(0.6);
     expect(merged.dies[0]!.slotNumber).toBe(currentDie.slotNumber);
     const filled = withStandardItems({ ...merged, punches: [stalePunch], dies: [staleDie] });
     expect(filled.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
     expect(filled.punches[0]!.tipAngle).toBe(86);
+    expect(filled.punches[0]!.tipRadius).toBe(0.6);
     expect(filled.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
   });
 
-  it('replaces the retired built-in 90° MotionX punch label in persisted libraries', () => {
+  it('replaces retired built-in MotionX R0.2 labels and notes in persisted libraries', () => {
     const currentPunch = std.punches[0]!;
-    const legacyPunch = {
-      ...currentPunch,
-      name: 'MotionX core punch 90° R0.2',
-      tipAngle: 90,
-      notes: 'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.',
-    };
-    const migrated = migrateLibraryDetailed({ version: LIBRARY_VERSION, punches: [legacyPunch] }).library.punches[0]!;
-    expect(migrated.name).toBe('MotionX core punch 86° R0.2');
-    expect(migrated.tipAngle).toBe(86);
-    expect(migrated.tipRadius).toBe(0.2);
-    expect(migrated.notes).toBe(currentPunch.notes);
+    const retired = [
+      {
+        name: 'MotionX core punch 90° R0.2',
+        tipAngle: 90,
+        notes: 'A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039); curved edges are tessellated approximations; load rating awaits factory confirmation.',
+      },
+      {
+        name: 'MotionX core punch 86° R0.2',
+        tipAngle: 86,
+        notes: 'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.',
+      },
+      {
+        name: 'MotionX core punch 86° R0.2',
+        tipAngle: 86,
+        notes: 'Operator-approved 86° calculation angle; calculation nose radius R0.2 remains provisional because supplied purchase drawings show R0.6 and R0.8; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; physical radius and load rating await factory confirmation.',
+      },
+    ];
+    for (const legacy of retired) {
+      const migrated = migrateLibraryDetailed({
+        version: LIBRARY_VERSION,
+        punches: [{ ...currentPunch, ...legacy, tipRadius: 0.2 }],
+      }).library.punches[0]!;
+      expect(migrated.name).toBe('MotionX core punch 86° R0.6');
+      expect(migrated.tipAngle).toBe(86);
+      expect(migrated.tipRadius).toBe(0.6);
+      expect(migrated.notes).toBe(currentPunch.notes);
+    }
 
     const operatorNotes = migrateLibraryDetailed({
       version: LIBRARY_VERSION,
-      punches: [{ ...legacyPunch, notes: 'Operator note: measured at Station S1' }],
+      punches: [{
+        ...currentPunch,
+        name: 'MotionX core punch 86° R0.2',
+        tipRadius: 0.2,
+        notes: 'Operator note: measured at Station S1',
+      }],
     }).library.punches[0]!;
+    expect(operatorNotes.name).toBe('MotionX core punch 86° R0.6');
     expect(operatorNotes.notes).toBe('Operator note: measured at Station S1');
   });
 

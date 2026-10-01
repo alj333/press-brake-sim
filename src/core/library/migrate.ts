@@ -154,11 +154,20 @@ function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, m
   };
 }
 
-const RETIRED_MOTIONX_PUNCH_NOTES = 'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.';
+const RETIRED_MOTIONX_PUNCH_NAMES = new Set([
+  'MotionX core punch 90° R0.2',
+  'MotionX core punch 86° R0.2',
+]);
+
+const RETIRED_MOTIONX_PUNCH_NOTES = new Set([
+  'A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039); curved edges are tessellated approximations; load rating awaits factory confirmation.',
+  'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.',
+  'Operator-approved 86° calculation angle; calculation nose radius R0.2 remains provisional because supplied purchase drawings show R0.6 and R0.8; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; physical radius and load rating await factory confirmation.',
+]);
 
 /**
  * Current built-ins own availability metadata even when a persisted same-id record is stale.
- * The MotionX punch also owns its approved angle/provisional-radius calculation specification.
+ * The MotionX punch also owns its selected drawing-based calculation specification.
  * Operator labels and notes remain intact unless they are known retired built-in values.
  */
 function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefined): T {
@@ -174,8 +183,8 @@ function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefin
   if (next.kind === 'punch' && standard.kind === 'punch' && next.id === MOTIONX_PUNCH_ID) {
     next.tipAngle = standard.tipAngle;
     next.tipRadius = standard.tipRadius;
-    if (next.name === 'MotionX core punch 90° R0.2') next.name = standard.name;
-    if (next.notes === RETIRED_MOTIONX_PUNCH_NOTES) {
+    if (RETIRED_MOTIONX_PUNCH_NAMES.has(next.name)) next.name = standard.name;
+    if (next.notes !== undefined && RETIRED_MOTIONX_PUNCH_NOTES.has(next.notes)) {
       if (standard.notes === undefined) delete next.notes;
       else next.notes = standard.notes;
     }

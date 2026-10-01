@@ -64,11 +64,13 @@ describe('standard library', () => {
       const d = derivePunchParams(p.profile.points);
       if (p.id === MOTIONX_PUNCH_ID) {
         expect(p.tipAngle).toBe(MOTIONX_PUNCH_SPEC.tipAngle);
+        expect(p.tipRadius).toBe(MOTIONX_PUNCH_SPEC.tipRadius);
         expect(d.tipAngle, p.id).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipAngle, 2);
+        expect(d.tipRadius, p.id).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipRadius, 3);
       } else {
         expect(d.tipAngle, p.id).toBeCloseTo(p.tipAngle, 2);
+        expect(d.tipRadius, p.id).toBeCloseTo(p.tipRadius, 3);
       }
-      expect(d.tipRadius, p.id).toBeCloseTo(p.tipRadius, 3);
       expect(p.profile.points.some(q => q.x === 0 && q.y === 0), p.id).toBe(true);
     }
     for (const d of lib.dies) {

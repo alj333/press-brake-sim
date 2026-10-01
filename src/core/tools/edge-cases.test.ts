@@ -95,7 +95,10 @@ describe('derivePunchParams — tips the builder skipped', () => {
     for (const p of lib.punches) {
       const mirrored = p.profile.points.map(q => ({ x: -q.x, y: q.y })).reverse();
       const d = derivePunchParams(mirrored);
-      expect(d.tipRadius, p.id).toBeCloseTo(p.tipRadius, 3);
+      expect(d.tipRadius, p.id).toBeCloseTo(
+        p.id === MOTIONX_PUNCH_ID ? MOTIONX_PUNCH_CAD_SPEC.tipRadius : p.tipRadius,
+        3,
+      );
       expect(d.tipAngle, p.id).toBeCloseTo(
         p.id === MOTIONX_PUNCH_ID ? MOTIONX_PUNCH_CAD_SPEC.tipAngle : p.tipAngle,
         2,

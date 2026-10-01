@@ -17,7 +17,7 @@ const flips = (p: BendProgram): number => p.steps.filter(s => s.manipulation.tur
 const errorCollisions = (p: BendProgram) => p.steps.flatMap(s => s.collisions.filter(c => c.severity === 'error'));
 
 describe('planProgram — samples', () => {
-  it('uses the approved punch angle and propagates the separate radius and punch/die A360 warnings', () => {
+  it('uses the selected punch drawing geometry and propagates the punch/die A360 warnings', () => {
     const s = sampleSetup('L-bracket');
     const library = buildStandardLibrary();
     const setup = defaultToolSetup(library, s.machine, s.truth.thickness)!;
@@ -27,16 +27,25 @@ describe('planProgram — samples', () => {
     expect(warnings[0]).toMatchObject({ severity: 'warning', params: { stationId: 'S1', slotNumber: '1' } });
     expect(program.warnings).toContainEqual(expect.objectContaining({
       key: 'warnings.setup.punchCadGeometryMismatch', severity: 'warning',
-      params: expect.objectContaining({ stationId: 'S1', confirmedAngle: 86 }),
+      params: expect.objectContaining({
+        stationId: 'S1', selectedAngle: 86, selectedRadius: 0.6, cadAngle: 90, cadRadius: 0.2,
+      }),
     }));
-    expect(program.warnings).toContainEqual(expect.objectContaining({
-      key: 'warnings.setup.punchRadiusUnverified', severity: 'warning',
-      params: expect.objectContaining({ stationId: 'S1', provisionalRadius: 0.2 }),
-    }));
+    expect(program.warnings.map(message => message.key)).not.toContain('warnings.setup.punchRadiusUnverified');
+    expect(program.steps[0]?.punchTipRadius).toBe(0.6);
     expect(program.steps[0]!.warnings).not.toContainEqual(expect.objectContaining({
       key: 'warnings.tool.angle', severity: 'error',
     }));
     expect(program.steps[0]!.bottoming).toBe(false);
+
+    const radiusControlled = planProgram({
+      ...inputOf(s),
+      setup,
+      library,
+      material: { ...s.material, tensileStrength: 80, minInnerRadiusFactor: 0.1 },
+    });
+    expect(radiusControlled.steps[0]?.punchTipRadius).toBe(0.6);
+    expect(radiusControlled.steps[0]?.actualInnerRadius).toBe(0.6);
   });
 
   it('never labels a program feasible when the physical punch inventory is exceeded', () => {

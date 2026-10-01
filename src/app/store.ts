@@ -16,7 +16,7 @@ import { matchToDxf, recognizeSheet } from '../core/import/recognize';
 import { buildPartModel } from '../core/part';
 import {
   STANDARD_MATERIAL_ID, availableSegmentLengths, buildStandardLibrary, defaultToolSetup,
-  hasBoundedSegmentInventory, MOTIONX_PUNCH_ID, MOTIONX_PUNCH_SPEC, newCustomId, segmentsForLength,
+  hasBoundedSegmentInventory, MOTIONX_PUNCH_CAD_SPEC, MOTIONX_PUNCH_ID, MOTIONX_PUNCH_SPEC, newCustomId, segmentsForLength,
 } from '../core/tools';
 import { defaultMachine, validateMachine, validateSetup } from '../core/machine';
 import { LibraryStore, findMachine, findMaterial } from '../core/library';
@@ -275,12 +275,13 @@ function programToolsDiffer(program: BendProgram | null, library: Pick<ToolLibra
   if (toolSnapshotDiffers) return true;
   if (!program.steps.some(step => step.punchId === MOTIONX_PUNCH_ID)) return false;
 
-  // v0.1.4 programs predate the separate radius warning. Force a re-plan so their persisted
-  // warning set cannot present provisional R0.2 as a confirmed physical radius.
-  const angleWarning = program.warnings.find(message => message.key === 'warnings.setup.punchCadGeometryMismatch');
-  const radiusWarning = program.warnings.find(message => message.key === 'warnings.setup.punchRadiusUnverified');
-  return angleWarning?.params?.confirmedAngle !== MOTIONX_PUNCH_SPEC.tipAngle
-    || radiusWarning?.params?.provisionalRadius !== MOTIONX_PUNCH_SPEC.tipRadius;
+  // Require the current drawing↔A360 warning metadata as well as the per-step tool snapshot.
+  // This retires v0.1.5 programs that used provisional R0.2 or the former split radius warning.
+  const geometryWarning = program.warnings.find(message => message.key === 'warnings.setup.punchCadGeometryMismatch');
+  return geometryWarning?.params?.selectedAngle !== MOTIONX_PUNCH_SPEC.tipAngle
+    || geometryWarning?.params?.selectedRadius !== MOTIONX_PUNCH_SPEC.tipRadius
+    || geometryWarning?.params?.cadAngle !== MOTIONX_PUNCH_CAD_SPEC.tipAngle
+    || geometryWarning?.params?.cadRadius !== MOTIONX_PUNCH_CAD_SPEC.tipRadius;
 }
 
 export function selectSetupMessages(s: Pick<ProjectState, 'project' | 'library'>): Message[] {

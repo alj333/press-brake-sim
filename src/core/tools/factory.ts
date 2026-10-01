@@ -4,15 +4,16 @@
  * (straight dimensions are reliable; curved edges remain tessellated approximations). Active-die
  * values are the controller records photographed by Boom, so calculation metadata remains aligned
  * with the machine UI even where its nominal V differs from the mesh-derived face lines. Punch
- * calculation angle follows Jordan's explicit 86° approval. The active R0.2 calculation radius is
- * provisional because the supplied purchase drawings show R0.6 and R0.8; the A360 mesh remains the
- * conservative collision outline where that source differs.
+ * calculation geometry follows Jordan's selection of the higher-quality purchase-pack drawing at
+ * 86° / R0.6. The A360 mesh remains the conservative collision outline where that source differs;
+ * selecting the drawing does not by itself confirm the identity of the physically fitted tool.
  */
 import type { Die, Polygon2, Punch, Vec2 } from '../types';
 import { finishProfile, roundTo } from './profile';
 
 export const MOTIONX_TOOL_SOURCE_URL = 'https://a360.co/4cRLoxM';
 export const MOTIONX_TOOL_SOURCE_SHA256 = 'a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039';
+export const MOTIONX_PUNCH_DRAWING_SOURCE_SHA256 = '8e12200492c6563e6827744519ca864651d686dfaf0946fd6f696fad97a14d52';
 export const MOTIONX_PUNCH_ID = 'std:motionx-core-punch-r1';
 export const MOTIONX_DIE_PHYSICAL_ID = 'motionx:core-multi-v-die-r1';
 export const MOTIONX_DIE_SLOT_IDS = {
@@ -26,11 +27,8 @@ export const MOTIONX_DIE_SLOT_IDS = {
 } as const;
 export const MOTIONX_DEFAULT_DIE_ID = MOTIONX_DIE_SLOT_IDS[1];
 
-/** Approved calculation angle with a provisional radius pending physical/manufacturer verification. */
-export const MOTIONX_PUNCH_SPEC = { tipAngle: 86, tipRadius: 0.2 } as const;
-
-/** Nose radii visible in the supplied purchase drawings; neither is confirmed on the fitted tool. */
-export const MOTIONX_PUNCH_PURCHASE_DRAWING_RADII = [0.6, 0.8] as const;
+/** Calculation geometry selected from the higher-quality supplied purchase-pack drawing. */
+export const MOTIONX_PUNCH_SPEC = { tipAngle: 86, tipRadius: 0.6 } as const;
 
 /** Parameters derived from the retained A360 collision outline. */
 export const MOTIONX_PUNCH_CAD_SPEC = { tipAngle: 90, tipRadius: 0.2 } as const;
@@ -129,7 +127,7 @@ export function motionXFactoryPunch(): Punch {
   return {
     kind: 'punch',
     id: MOTIONX_PUNCH_ID,
-    name: 'MotionX core punch 86° R0.2',
+    name: 'MotionX core punch 86° R0.6',
     source: 'standard',
     family: 'gooseneck',
     height: 148.062248355,
@@ -142,7 +140,7 @@ export function motionXFactoryPunch(): Punch {
     tipAngle: MOTIONX_PUNCH_SPEC.tipAngle,
     bodyWidth: 25.126552,
     tangCentreX: -13.895097,
-    notes: `Operator-approved 86° calculation angle; calculation nose radius R0.2 remains provisional because supplied purchase drawings show R0.6 and R0.8; A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; physical radius and load rating await factory confirmation.`,
+    notes: `Selected higher-quality purchase-pack drawing (${MOTIONX_PUNCH_DRAWING_SOURCE_SHA256}) sets calculation geometry to 86° / R0.6; A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}) is retained as a conservative approximately 90° / R0.2 collision outline; curved edges are tessellated approximations; fitted-tool identity and load rating await factory confirmation.`,
   };
 }
 
@@ -159,22 +157,6 @@ export function motionXPunchGeometryDiscrepancy(
   return {
     calculation: { ...MOTIONX_PUNCH_SPEC },
     cad: { ...MOTIONX_PUNCH_CAD_SPEC },
-  };
-}
-
-export interface MotionXPunchRadiusEvidence {
-  provisionalRadius: number;
-  purchaseDrawingRadii: readonly number[];
-}
-
-/** Keeps the unresolved physical nose radius visible without reopening the approved 86° angle. */
-export function motionXPunchRadiusEvidence(
-  punch: Pick<Punch, 'id'>,
-): MotionXPunchRadiusEvidence | null {
-  if (punch.id !== MOTIONX_PUNCH_ID) return null;
-  return {
-    provisionalRadius: MOTIONX_PUNCH_SPEC.tipRadius,
-    purchaseDrawingRadii: [...MOTIONX_PUNCH_PURCHASE_DRAWING_RADII],
   };
 }
 

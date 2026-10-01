@@ -118,7 +118,6 @@ describe('project store — tools and machine', () => {
     expect(station.segments.reduce((total, segment) => total + segment, 0)).toBe(2465);
     expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
       'warnings.setup.punchCadGeometryMismatch',
-      'warnings.setup.punchRadiusUnverified',
       'warnings.setup.controllerCadGeometryMismatch',
       'warnings.setup.dieLengthUnverified',
     ]);
@@ -432,9 +431,11 @@ describe('project store — files', () => {
       current.getState().loadProject(JSON.stringify(raw));
       const state = current.getState();
       const migratedOverlay = state.project.libraryOverlay.punches.find(punch => punch.id === MOTIONX_PUNCH_ID)!;
-      expect(migratedOverlay.name).toBe(legacyName === 'Operator label' ? legacyName : 'MotionX core punch 86° R0.2');
+      expect(migratedOverlay.name).toBe(legacyName === 'Operator label' ? legacyName : 'MotionX core punch 86° R0.6');
       expect(migratedOverlay.tipAngle).toBe(86);
+      expect(migratedOverlay.tipRadius).toBe(0.6);
       expect(state.library.punches.find(punch => punch.id === MOTIONX_PUNCH_ID)?.tipAngle).toBe(86);
+      expect(state.library.punches.find(punch => punch.id === MOTIONX_PUNCH_ID)?.tipRadius).toBe(0.6);
       expect(state.project.program?.steps[0]?.punchName).toBe(legacyName);
       expect(state.programStale).toBe(true);
       expect(parseProject(state.saveProject(), {
@@ -444,20 +445,28 @@ describe('project store — files', () => {
     }
   });
 
-  it('reopens v0.1.4 MotionX programs without the separate radius warning as stale', async () => {
+  it('reopens v0.1.5 MotionX programs using provisional R0.2 and the retired radius warning as stale', async () => {
     const legacy = makeProductionStore();
     legacy.getState().loadFlat(loadTruth('L-bracket').flat);
     await legacy.getState().plan();
     const raw = JSON.parse(serializeProject(legacy.getState().project, legacy.getState().library));
-    raw.program.warnings = raw.program.warnings.filter(
-      (message: { key: string }) => message.key !== 'warnings.setup.punchRadiusUnverified',
-    );
     const oldPunchWarning = raw.program.warnings.find(
       (message: { key: string }) => message.key === 'warnings.setup.punchCadGeometryMismatch',
     );
     oldPunchWarning.params = {
       stationId: 'S1', confirmedAngle: 86, confirmedRadius: 0.2, cadAngle: 90, cadRadius: 0.2,
     };
+    raw.program.warnings.push({
+      key: 'warnings.setup.punchRadiusUnverified',
+      severity: 'warning',
+      params: { stationId: 'S1', provisionalRadius: 0.2, purchaseDrawingRadii: 'R0.6 / R0.8' },
+    });
+    for (const step of raw.program.steps) {
+      if (step.punchId !== MOTIONX_PUNCH_ID) continue;
+      step.punchName = 'MotionX core punch 86° R0.2';
+      step.punchTipAngle = 86;
+      step.punchTipRadius = 0.2;
+    }
 
     const current = makeProductionStore();
     current.getState().loadProject(JSON.stringify(raw));
