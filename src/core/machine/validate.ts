@@ -2,7 +2,12 @@
  * Machine and tool-setup validation → Message[] (i18n keys, see docs/specs/tooling-machine.md §2).
  */
 import type { Machine, Message, ToolLibrary, ToolSetup } from '../types';
-import { MOTIONX_DIE_PHYSICAL_ID, motionXDieGeometryDiscrepancy, motionXPunchGeometryDiscrepancy } from '../tools/factory';
+import {
+  MOTIONX_DIE_PHYSICAL_ID,
+  motionXDieGeometryDiscrepancy,
+  motionXPunchGeometryDiscrepancy,
+  motionXPunchRadiusEvidence,
+} from '../tools/factory';
 import { availableSegmentLengths, hasBoundedSegmentInventory, isToolInStock } from '../tools/stock';
 
 export interface ValidateMachineOptions {
@@ -97,10 +102,20 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
         severity: 'warning',
         params: {
           stationId: st.id,
-          confirmedAngle: punchGeometryDiscrepancy.confirmed.tipAngle,
-          confirmedRadius: punchGeometryDiscrepancy.confirmed.tipRadius,
+          confirmedAngle: punchGeometryDiscrepancy.calculation.tipAngle,
           cadAngle: punchGeometryDiscrepancy.cad.tipAngle,
-          cadRadius: punchGeometryDiscrepancy.cad.tipRadius,
+        },
+      });
+    }
+    const punchRadiusEvidence = punch ? motionXPunchRadiusEvidence(punch) : null;
+    if (punchRadiusEvidence) {
+      out.push({
+        key: 'warnings.setup.punchRadiusUnverified',
+        severity: 'warning',
+        params: {
+          stationId: st.id,
+          provisionalRadius: punchRadiusEvidence.provisionalRadius,
+          purchaseDrawingRadii: punchRadiusEvidence.purchaseDrawingRadii.map(radius => `R${radius}`).join(' / '),
         },
       });
     }

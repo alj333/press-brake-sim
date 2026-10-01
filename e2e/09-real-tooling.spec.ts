@@ -25,9 +25,12 @@ test('factory tooling is grouped by stock, labelled by die slot and usable in Th
   await expect(die.locator('option:checked')).toContainText(/Die slot \d+/);
   await expect(page.getByTestId('die-slot-summary')).toContainText(/Die slot \d+/);
   await expect(page.getByTestId('punch-segment-inventory')).toContainText('10 mm × 1, 15 mm × 1, 20 mm × 1, 50 mm × 1, 100 mm × 2, 200 mm × 1, 300 mm × 1, 835 mm × 2');
-  await expect(page.getByTestId('setup-warnings')).toContainText('the confirmed punch tip is 86° R0.2');
+  await expect(page.getByTestId('setup-warnings')).toContainText('the punch angle is approved at 86°');
+  await expect(page.getByTestId('setup-warnings')).toContainText('punch nose radius is still unverified');
+  await expect(page.getByTestId('setup-warnings')).toContainText('provisional R0.2');
   await expect(page.getByTestId('setup-warnings')).toContainText('Bend calculations use controller values; collision checks use the A360 mesh-derived outline.');
 
+  const motionXPunchId = await punch.inputValue();
   const unavailablePunch = punch.locator('optgroup').nth(1).locator('option').first();
   const unavailableId = await unavailablePunch.getAttribute('value');
   expect(unavailableId).toBeTruthy();
@@ -39,8 +42,13 @@ test('factory tooling is grouped by stock, labelled by die slot and usable in Th
   await expect(punch.locator('optgroup').nth(0)).toHaveAttribute('label', 'มีในสต็อก');
   await expect(punch.locator('optgroup').nth(1)).toHaveAttribute('label', 'ขณะนี้ไม่มีในสต็อก');
   await expect(page.getByTestId('station-punch-S1-stock-warning')).toHaveText('เครื่องมือที่เลือกขณะนี้ไม่มีในสต็อก');
+  await punch.selectOption(motionXPunchId);
+  await expect(punch.locator('option:checked')).toContainText('MotionX core punch 86° R0.2');
   await expect(page.getByTestId('die-slot-summary')).toContainText('ร่องดายหมายเลข');
+  await expect(page.getByTestId('setup-warnings')).toContainText('อนุมัติให้ใช้มุมพั้นช์ 86°');
+  await expect(page.getByTestId('setup-warnings')).toContainText('รัศมีปลายพั้นช์ยังไม่ได้ยืนยัน');
   await expect(page.getByTestId('setup-warnings')).toContainText('ระบบใช้ค่าคอนโทรลคำนวณการพับ และใช้แนวรูปทรงที่ถอดจากเมช A360 ตรวจการชน');
+  await expect(page.getByTestId('setup-warnings')).toContainText('ยังไม่ได้ยืนยันความยาวและจำนวนท่อนดาย');
 
   const overflow = await page.evaluate('document.documentElement.scrollWidth - window.innerWidth');
   expect(overflow).toBeLessThanOrEqual(1);

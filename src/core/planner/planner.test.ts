@@ -17,7 +17,7 @@ const flips = (p: BendProgram): number => p.steps.filter(s => s.manipulation.tur
 const errorCollisions = (p: BendProgram) => p.steps.flatMap(s => s.collisions.filter(c => c.severity === 'error'));
 
 describe('planProgram — samples', () => {
-  it('uses the confirmed punch angle and propagates the punch/die A360 outline warnings', () => {
+  it('uses the approved punch angle and propagates the separate radius and punch/die A360 warnings', () => {
     const s = sampleSetup('L-bracket');
     const library = buildStandardLibrary();
     const setup = defaultToolSetup(library, s.machine, s.truth.thickness)!;
@@ -28,6 +28,10 @@ describe('planProgram — samples', () => {
     expect(program.warnings).toContainEqual(expect.objectContaining({
       key: 'warnings.setup.punchCadGeometryMismatch', severity: 'warning',
       params: expect.objectContaining({ stationId: 'S1', confirmedAngle: 86 }),
+    }));
+    expect(program.warnings).toContainEqual(expect.objectContaining({
+      key: 'warnings.setup.punchRadiusUnverified', severity: 'warning',
+      params: expect.objectContaining({ stationId: 'S1', provisionalRadius: 0.2 }),
     }));
     expect(program.steps[0]!.warnings).not.toContainEqual(expect.objectContaining({
       key: 'warnings.tool.angle', severity: 'error',

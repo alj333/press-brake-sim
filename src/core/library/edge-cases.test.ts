@@ -195,11 +195,19 @@ describe('migrateLibrary — hostile values', () => {
       ...currentPunch,
       name: 'MotionX core punch 90° R0.2',
       tipAngle: 90,
+      notes: 'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.',
     };
     const migrated = migrateLibraryDetailed({ version: LIBRARY_VERSION, punches: [legacyPunch] }).library.punches[0]!;
     expect(migrated.name).toBe('MotionX core punch 86° R0.2');
     expect(migrated.tipAngle).toBe(86);
     expect(migrated.tipRadius).toBe(0.2);
+    expect(migrated.notes).toBe(currentPunch.notes);
+
+    const operatorNotes = migrateLibraryDetailed({
+      version: LIBRARY_VERSION,
+      punches: [{ ...legacyPunch, notes: 'Operator note: measured at Station S1' }],
+    }).library.punches[0]!;
+    expect(operatorNotes.notes).toBe('Operator note: measured at Station S1');
   });
 
   it('mergeLibraries keeps base order, appends overlay-only items, and withStandardItems is idempotent', () => {

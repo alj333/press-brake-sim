@@ -7,16 +7,18 @@ import {
   MOTIONX_PUNCH_CAD_SPEC,
   MOTIONX_PUNCH_ID,
   MOTIONX_PUNCH_INVENTORY,
+  MOTIONX_PUNCH_PURCHASE_DRAWING_RADII,
   MOTIONX_PUNCH_SPEC,
   motionXDieGeometryDiscrepancy,
   motionXFactoryDies,
   motionXFactoryPunch,
   motionXPunchGeometryDiscrepancy,
+  motionXPunchRadiusEvidence,
 } from './factory';
 import { isSimplePolygon } from './profile';
 
 describe('MotionX factory tooling', () => {
-  it('uses the confirmed 86° R0.2 tip and bounded 10-piece inventory with a conservative A360 outline', () => {
+  it('uses the approved 86° angle, provisional R0.2 and bounded 10-piece inventory with a conservative A360 outline', () => {
     const punch = motionXFactoryPunch();
     const derived = derivePunchParams(punch.profile.points);
     const ext = bounds(punch.profile.points);
@@ -49,10 +51,17 @@ describe('MotionX factory tooling', () => {
     expect(derived.tipRadius).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipRadius, 3);
     expect(derived.tangCentreX).toBeCloseTo(-13.895097, 6);
     expect(motionXPunchGeometryDiscrepancy(punch)).toEqual({
-      confirmed: MOTIONX_PUNCH_SPEC,
+      calculation: MOTIONX_PUNCH_SPEC,
       cad: MOTIONX_PUNCH_CAD_SPEC,
     });
+    expect(motionXPunchRadiusEvidence(punch)).toEqual({
+      provisionalRadius: 0.2,
+      purchaseDrawingRadii: MOTIONX_PUNCH_PURCHASE_DRAWING_RADII,
+    });
     expect(motionXPunchGeometryDiscrepancy({ id: 'other' })).toBeNull();
+    expect(motionXPunchRadiusEvidence({ id: 'other' })).toBeNull();
+    expect(punch.notes).toContain('Operator-approved 86° calculation angle');
+    expect(punch.notes).toContain('R0.2 remains provisional');
   });
 
   it('creates all seven controller slots from one complete mesh-derived 65 mm multi-V body', () => {

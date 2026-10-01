@@ -100,7 +100,11 @@ describe('validateSetup', () => {
     expect(actualMessages.filter(message => message.key === 'warnings.setup.punchCadGeometryMismatch')).toHaveLength(1);
     expect(actualMessages.find(message => message.key === 'warnings.setup.punchCadGeometryMismatch')).toMatchObject({
       severity: 'warning',
-      params: { stationId: 'S1', confirmedAngle: 86, confirmedRadius: 0.2, cadAngle: 90, cadRadius: 0.2 },
+      params: { stationId: 'S1', confirmedAngle: 86, cadAngle: 90 },
+    });
+    expect(actualMessages.find(message => message.key === 'warnings.setup.punchRadiusUnverified')).toMatchObject({
+      severity: 'warning',
+      params: { stationId: 'S1', provisionalRadius: 0.2, purchaseDrawingRadii: 'R0.6 / R0.8' },
     });
     expect(actualMessages.filter(message => message.key === 'warnings.setup.controllerCadGeometryMismatch')).toHaveLength(1);
     expect(actualMessages.find(message => message.key === 'warnings.setup.controllerCadGeometryMismatch')).toMatchObject({

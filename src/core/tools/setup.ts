@@ -1,7 +1,7 @@
 /**
- * Default tool setup for a sheet thickness: the straight 88° R0.8 punch and the 88° V die
- * closest to recommendedV(t), on one station spanning the bed, sectionalised from the standard
- * segment set. See docs/specs/tooling-machine.md §1.7.
+ * Default tool setup for a sheet thickness: the stocked MotionX punch and a stocked MotionX die
+ * groove closest to recommendedV(t), on one centred station composed from the bounded physical
+ * punch inventory. Generic stocked tools remain the fallback. See docs/specs/tooling-machine.md §1.7.
  */
 import type { Die, Machine, Punch, ToolLibrary, ToolSetup } from '../types';
 import { recommendedV } from '../bend';
@@ -87,8 +87,8 @@ export interface DefaultSetupOptions {
 }
 
 /**
- * One station over the whole bed with the standard straight punch and the recommended V die
- * for the thickness (e.g. t = 2 → V16, t = 1.5 → V12, matching the samples' expected.defaultSetup).
+ * One station with the stocked MotionX punch and recommended in-stock die groove for the thickness.
+ * Generic stocked punches and V dies remain fallbacks when the factory tooling is absent.
  * When the punch pieces cannot compose the station length exactly (a bed that is not a multiple
  * of 5 mm, e.g. 48 in = 1219.2 mm) the station is shortened to the composed length so that the
  * setup always passes validateSetup. Returns null when no suitable tools exist in the library.

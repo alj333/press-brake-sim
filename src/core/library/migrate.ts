@@ -154,10 +154,12 @@ function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, m
   };
 }
 
+const RETIRED_MOTIONX_PUNCH_NOTES = 'Confirmed physical tip 86° R0.2; A360 mesh-derived profile (a649126acf35a89fab587132eed03e492cec6385c3f503cddf29ac8cfb0c2039) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.';
+
 /**
  * Current built-ins own availability metadata even when a persisted same-id record is stale.
- * The MotionX punch also owns its confirmed tip specification; operator labels remain intact
- * unless they are the retired built-in 90° label.
+ * The MotionX punch also owns its approved angle/provisional-radius calculation specification.
+ * Operator labels and notes remain intact unless they are known retired built-in values.
  */
 function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefined): T {
   if (!standard) return item;
@@ -173,6 +175,10 @@ function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefin
     next.tipAngle = standard.tipAngle;
     next.tipRadius = standard.tipRadius;
     if (next.name === 'MotionX core punch 90° R0.2') next.name = standard.name;
+    if (next.notes === RETIRED_MOTIONX_PUNCH_NOTES) {
+      if (standard.notes === undefined) delete next.notes;
+      else next.notes = standard.notes;
+    }
   }
   if (next.kind === 'die' && standard.kind === 'die') {
     delete next.slotNumber;

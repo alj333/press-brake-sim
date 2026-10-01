@@ -16,7 +16,7 @@ import { matchToDxf, recognizeSheet } from '../core/import/recognize';
 import { buildPartModel } from '../core/part';
 import {
   STANDARD_MATERIAL_ID, availableSegmentLengths, buildStandardLibrary, defaultToolSetup,
-  hasBoundedSegmentInventory, MOTIONX_PUNCH_ID, newCustomId, segmentsForLength,
+  hasBoundedSegmentInventory, MOTIONX_PUNCH_ID, MOTIONX_PUNCH_SPEC, newCustomId, segmentsForLength,
 } from '../core/tools';
 import { defaultMachine, validateMachine, validateSetup } from '../core/machine';
 import { LibraryStore, findMachine, findMaterial } from '../core/library';
@@ -260,7 +260,8 @@ function sameOrder(a: readonly string[], b: readonly string[]): boolean {
 
 /** A saved program carries operator-facing and calculation snapshots; changes require a re-plan. */
 function programToolsDiffer(program: BendProgram | null, library: Pick<ToolLibrary, 'punches' | 'dies'>): boolean {
-  return program?.steps.some(step => {
+  if (!program) return false;
+  const toolSnapshotDiffers = program.steps.some(step => {
     const punch = library.punches.find(item => item.id === step.punchId);
     const die = library.dies.find(item => item.id === step.dieId);
     if (!punch || !die) return true;
@@ -270,7 +271,16 @@ function programToolsDiffer(program: BendProgram | null, library: Pick<ToolLibra
     const calculationDiffers = (step.punchTipAngle !== undefined && step.punchTipAngle !== punch.tipAngle)
       || (step.punchTipRadius !== undefined && step.punchTipRadius !== punch.tipRadius);
     return missingMotionXSnapshot || calculationDiffers || step.punchName !== punch.name || step.dieName !== dieName;
-  }) ?? false;
+  });
+  if (toolSnapshotDiffers) return true;
+  if (!program.steps.some(step => step.punchId === MOTIONX_PUNCH_ID)) return false;
+
+  // v0.1.4 programs predate the separate radius warning. Force a re-plan so their persisted
+  // warning set cannot present provisional R0.2 as a confirmed physical radius.
+  const angleWarning = program.warnings.find(message => message.key === 'warnings.setup.punchCadGeometryMismatch');
+  const radiusWarning = program.warnings.find(message => message.key === 'warnings.setup.punchRadiusUnverified');
+  return angleWarning?.params?.confirmedAngle !== MOTIONX_PUNCH_SPEC.tipAngle
+    || radiusWarning?.params?.provisionalRadius !== MOTIONX_PUNCH_SPEC.tipRadius;
 }
 
 export function selectSetupMessages(s: Pick<ProjectState, 'project' | 'library'>): Message[] {

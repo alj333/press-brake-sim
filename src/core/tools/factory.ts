@@ -4,8 +4,9 @@
  * (straight dimensions are reliable; curved edges remain tessellated approximations). Active-die
  * values are the controller records photographed by Boom, so calculation metadata remains aligned
  * with the machine UI even where its nominal V differs from the mesh-derived face lines. Punch
- * calculation metadata follows the physical tip specification confirmed by the factory; the A360
- * mesh remains the conservative collision outline where that source differs.
+ * calculation angle follows Jordan's explicit 86° approval. The active R0.2 calculation radius is
+ * provisional because the supplied purchase drawings show R0.6 and R0.8; the A360 mesh remains the
+ * conservative collision outline where that source differs.
  */
 import type { Die, Polygon2, Punch, Vec2 } from '../types';
 import { finishProfile, roundTo } from './profile';
@@ -25,8 +26,11 @@ export const MOTIONX_DIE_SLOT_IDS = {
 } as const;
 export const MOTIONX_DEFAULT_DIE_ID = MOTIONX_DIE_SLOT_IDS[1];
 
-/** Confirmed physical tip specification shared by every stocked MotionX punch section. */
+/** Approved calculation angle with a provisional radius pending physical/manufacturer verification. */
 export const MOTIONX_PUNCH_SPEC = { tipAngle: 86, tipRadius: 0.2 } as const;
+
+/** Nose radii visible in the supplied purchase drawings; neither is confirmed on the fitted tool. */
+export const MOTIONX_PUNCH_PURCHASE_DRAWING_RADII = [0.6, 0.8] as const;
 
 /** Parameters derived from the retained A360 collision outline. */
 export const MOTIONX_PUNCH_CAD_SPEC = { tipAngle: 90, tipRadius: 0.2 } as const;
@@ -138,23 +142,39 @@ export function motionXFactoryPunch(): Punch {
     tipAngle: MOTIONX_PUNCH_SPEC.tipAngle,
     bodyWidth: 25.126552,
     tangCentreX: -13.895097,
-    notes: `Confirmed physical tip 86° R0.2; A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.`,
+    notes: `Operator-approved 86° calculation angle; calculation nose radius R0.2 remains provisional because supplied purchase drawings show R0.6 and R0.8; A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; physical radius and load rating await factory confirmation.`,
   };
 }
 
 export interface MotionXPunchGeometryDiscrepancy {
-  confirmed: { tipAngle: number; tipRadius: number };
+  calculation: { tipAngle: number; tipRadius: number };
   cad: { tipAngle: number; tipRadius: number };
 }
 
-/** Returns the intentional confirmed-spec↔A360-outline difference for the MotionX punch. */
+/** Returns the intentional calculation-spec↔A360-outline difference for the MotionX punch. */
 export function motionXPunchGeometryDiscrepancy(
   punch: Pick<Punch, 'id'>,
 ): MotionXPunchGeometryDiscrepancy | null {
   if (punch.id !== MOTIONX_PUNCH_ID) return null;
   return {
-    confirmed: { ...MOTIONX_PUNCH_SPEC },
+    calculation: { ...MOTIONX_PUNCH_SPEC },
     cad: { ...MOTIONX_PUNCH_CAD_SPEC },
+  };
+}
+
+export interface MotionXPunchRadiusEvidence {
+  provisionalRadius: number;
+  purchaseDrawingRadii: readonly number[];
+}
+
+/** Keeps the unresolved physical nose radius visible without reopening the approved 86° angle. */
+export function motionXPunchRadiusEvidence(
+  punch: Pick<Punch, 'id'>,
+): MotionXPunchRadiusEvidence | null {
+  if (punch.id !== MOTIONX_PUNCH_ID) return null;
+  return {
+    provisionalRadius: MOTIONX_PUNCH_SPEC.tipRadius,
+    purchaseDrawingRadii: [...MOTIONX_PUNCH_PURCHASE_DRAWING_RADII],
   };
 }
 

@@ -118,6 +118,7 @@ describe('project store — tools and machine', () => {
     expect(station.segments.reduce((total, segment) => total + segment, 0)).toBe(2465);
     expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
       'warnings.setup.punchCadGeometryMismatch',
+      'warnings.setup.punchRadiusUnverified',
       'warnings.setup.controllerCadGeometryMismatch',
       'warnings.setup.dieLengthUnverified',
     ]);
@@ -441,6 +442,31 @@ describe('project store — files', () => {
         materialId: state.project.materialId,
       }).program).toBeNull();
     }
+  });
+
+  it('reopens v0.1.4 MotionX programs without the separate radius warning as stale', async () => {
+    const legacy = makeProductionStore();
+    legacy.getState().loadFlat(loadTruth('L-bracket').flat);
+    await legacy.getState().plan();
+    const raw = JSON.parse(serializeProject(legacy.getState().project, legacy.getState().library));
+    raw.program.warnings = raw.program.warnings.filter(
+      (message: { key: string }) => message.key !== 'warnings.setup.punchRadiusUnverified',
+    );
+    const oldPunchWarning = raw.program.warnings.find(
+      (message: { key: string }) => message.key === 'warnings.setup.punchCadGeometryMismatch',
+    );
+    oldPunchWarning.params = {
+      stationId: 'S1', confirmedAngle: 86, confirmedRadius: 0.2, cadAngle: 90, cadRadius: 0.2,
+    };
+
+    const current = makeProductionStore();
+    current.getState().loadProject(JSON.stringify(raw));
+    expect(current.getState().project.program).not.toBeNull();
+    expect(current.getState().programStale).toBe(true);
+    expect(parseProject(current.getState().saveProject(), {
+      machineId: current.getState().project.machineId,
+      materialId: current.getState().project.materialId,
+    }).program).toBeNull();
   });
 
   it('exports the program as JSON and bilingual CSV', async () => {
