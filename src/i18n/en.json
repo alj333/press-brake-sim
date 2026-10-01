@@ -581,6 +581,7 @@
   "warnings.setup.duplicateStation": "Station id {{stationId}} is used twice",
   "warnings.setup.unknownTool": "Station {{stationId}}: tool {{toolId}} is not in the library",
   "warnings.setup.toolNotInStock": "Station {{stationId}}: {{tool}} is selected but is not currently in stock",
+  "warnings.setup.punchCadGeometryMismatch": "Station {{stationId}}: the confirmed punch tip is {{confirmedAngle}}° R{{confirmedRadius}}, while the retained A360 collision outline measures approximately {{cadAngle}}° R{{cadRadius}}. Bend calculations use the confirmed tip; collision checks keep the conservative A360 outline. Verify the physical profile before production.",
   "warnings.setup.controllerCadGeometryMismatch": "Station {{stationId}}, die ID {{slotNumber}}: controller V{{controllerV}} / {{controllerAngle}}° / R{{controllerRadius}} differs from A360 V{{cadV}} / {{cadAngle}}° / R{{cadRadius}}. Bend calculations use controller values; collision checks use the A360 mesh-derived outline. Verify the physical groove before production.",
   "warnings.setup.dieLengthUnverified": "Station {{stationId}}, die ID {{slotNumber}}: physical die length and section quantity are not confirmed, so Z-axis die coverage cannot be verified.",
   "warnings.setup.physicalDieSlotConflict": "The same MotionX multi-V die is assigned to different groove IDs ({{slots}}) at once. Use one groove orientation unless separate die sections are confirmed.",

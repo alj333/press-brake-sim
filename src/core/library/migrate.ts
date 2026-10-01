@@ -26,6 +26,7 @@ import { PUNCH_RATINGS } from '../tools/punches';
 import { MAX_SEGMENT_INVENTORY_PIECES } from '../tools/stock';
 import { standardDieRating } from '../tools/dies';
 import { LIBRARY_VERSION, buildStandardLibrary } from '../tools/standard';
+import { MOTIONX_PUNCH_ID } from '../tools/factory';
 import { CUSTOM_DEFAULT_RATING, enforceFrameExtents } from '../tools/custom';
 import type { ToolKind } from '../tools/custom';
 import { defaultMachine } from '../machine/default';
@@ -153,7 +154,11 @@ function toolBase(raw: Rec, index: number, collection: string, kind: ToolKind, m
   };
 }
 
-/** Current built-ins own availability metadata even when a persisted same-id record is stale. */
+/**
+ * Current built-ins own availability metadata even when a persisted same-id record is stale.
+ * The MotionX punch also owns its confirmed tip specification; operator labels remain intact
+ * unless they are the retired built-in 90° label.
+ */
 function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefined): T {
   if (!standard) return item;
   const next = { ...item };
@@ -164,6 +169,11 @@ function withCurrentStandardStock<T extends Tool>(item: T, standard: T | undefin
   if (standard.segmentInventory !== undefined) next.segmentInventory = parseSegmentInventory(standard.segmentInventory);
   const physicalToolId = parseOptionalText(standard.physicalToolId);
   if (physicalToolId !== undefined) next.physicalToolId = physicalToolId;
+  if (next.kind === 'punch' && standard.kind === 'punch' && next.id === MOTIONX_PUNCH_ID) {
+    next.tipAngle = standard.tipAngle;
+    next.tipRadius = standard.tipRadius;
+    if (next.name === 'MotionX core punch 90° R0.2') next.name = standard.name;
+  }
   if (next.kind === 'die' && standard.kind === 'die') {
     delete next.slotNumber;
     delete next.slotPosition;

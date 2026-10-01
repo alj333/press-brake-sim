@@ -52,6 +52,7 @@ describe('default tool setup', () => {
       }
       const setupMessages = validateSetup(setup, m, lib);
       expect(setupMessages.map(message => message.key)).toEqual([
+        'warnings.setup.punchCadGeometryMismatch',
         'warnings.setup.controllerCadGeometryMismatch',
         'warnings.setup.dieLengthUnverified',
       ]);

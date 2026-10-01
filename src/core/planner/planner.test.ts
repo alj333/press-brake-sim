@@ -17,7 +17,7 @@ const flips = (p: BendProgram): number => p.steps.filter(s => s.manipulation.tur
 const errorCollisions = (p: BendProgram) => p.steps.flatMap(s => s.collisions.filter(c => c.severity === 'error'));
 
 describe('planProgram — samples', () => {
-  it('propagates the real die controller-to-A360-mesh warning into the program', () => {
+  it('uses the confirmed punch angle and propagates the punch/die A360 outline warnings', () => {
     const s = sampleSetup('L-bracket');
     const library = buildStandardLibrary();
     const setup = defaultToolSetup(library, s.machine, s.truth.thickness)!;
@@ -25,7 +25,11 @@ describe('planProgram — samples', () => {
     const warnings = program.warnings.filter(message => message.key === 'warnings.setup.controllerCadGeometryMismatch');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({ severity: 'warning', params: { stationId: 'S1', slotNumber: '1' } });
-    expect(program.steps[0]!.warnings).toContainEqual(expect.objectContaining({
+    expect(program.warnings).toContainEqual(expect.objectContaining({
+      key: 'warnings.setup.punchCadGeometryMismatch', severity: 'warning',
+      params: expect.objectContaining({ stationId: 'S1', confirmedAngle: 86 }),
+    }));
+    expect(program.steps[0]!.warnings).not.toContainEqual(expect.objectContaining({
       key: 'warnings.tool.angle', severity: 'error',
     }));
     expect(program.steps[0]!.bottoming).toBe(false);

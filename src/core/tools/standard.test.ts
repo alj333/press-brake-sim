@@ -7,7 +7,7 @@ import { toolLoadCheck, daylightCheck, strokeCheck } from './checks';
 import { isSimplePolygon } from './profile';
 import { deriveDieParams, derivePunchParams } from './derive';
 import type { Tool } from '../types';
-import { MOTIONX_DIE_SLOT_IDS, MOTIONX_PUNCH_ID } from './factory';
+import { MOTIONX_DIE_SLOT_IDS, MOTIONX_PUNCH_CAD_SPEC, MOTIONX_PUNCH_ID, MOTIONX_PUNCH_SPEC } from './factory';
 
 function profileOk(t: Tool): void {
   const pts = t.profile.points;
@@ -62,7 +62,12 @@ describe('standard library', () => {
   it('punch tips at the origin, die notches at the origin with the stated V/angle', () => {
     for (const p of lib.punches) {
       const d = derivePunchParams(p.profile.points);
-      expect(d.tipAngle, p.id).toBeCloseTo(p.tipAngle, 2);
+      if (p.id === MOTIONX_PUNCH_ID) {
+        expect(p.tipAngle).toBe(MOTIONX_PUNCH_SPEC.tipAngle);
+        expect(d.tipAngle, p.id).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipAngle, 2);
+      } else {
+        expect(d.tipAngle, p.id).toBeCloseTo(p.tipAngle, 2);
+      }
       expect(d.tipRadius, p.id).toBeCloseTo(p.tipRadius, 3);
       expect(p.profile.points.some(q => q.x === 0 && q.y === 0), p.id).toBe(true);
     }

@@ -21,9 +21,11 @@ test('factory tooling is grouped by stock, labelled by die slot and usable in Th
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
 
+  await expect(punch.locator('option:checked')).toContainText('MotionX core punch 86° R0.2');
   await expect(die.locator('option:checked')).toContainText(/Die slot \d+/);
   await expect(page.getByTestId('die-slot-summary')).toContainText(/Die slot \d+/);
-  await expect(page.getByTestId('punch-segment-inventory')).toContainText(/\d+(?:\.\d+)? mm × \d+/);
+  await expect(page.getByTestId('punch-segment-inventory')).toContainText('10 mm × 1, 15 mm × 1, 20 mm × 1, 50 mm × 1, 100 mm × 2, 200 mm × 1, 300 mm × 1, 835 mm × 2');
+  await expect(page.getByTestId('setup-warnings')).toContainText('the confirmed punch tip is 86° R0.2');
   await expect(page.getByTestId('setup-warnings')).toContainText('Bend calculations use controller values; collision checks use the A360 mesh-derived outline.');
 
   const unavailablePunch = punch.locator('optgroup').nth(1).locator('option').first();

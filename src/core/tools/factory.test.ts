@@ -4,16 +4,19 @@ import { deriveDieParams, derivePunchParams } from './derive';
 import {
   MOTIONX_DIE_PHYSICAL_ID,
   MOTIONX_DIE_SLOT_IDS,
+  MOTIONX_PUNCH_CAD_SPEC,
   MOTIONX_PUNCH_ID,
   MOTIONX_PUNCH_INVENTORY,
+  MOTIONX_PUNCH_SPEC,
   motionXDieGeometryDiscrepancy,
   motionXFactoryDies,
   motionXFactoryPunch,
+  motionXPunchGeometryDiscrepancy,
 } from './factory';
 import { isSimplePolygon } from './profile';
 
 describe('MotionX factory tooling', () => {
-  it('uses the normalized A360 mesh-derived punch profile and confirmed bounded inventory', () => {
+  it('uses the confirmed 86° R0.2 tip and bounded 10-piece inventory with a conservative A360 outline', () => {
     const punch = motionXFactoryPunch();
     const derived = derivePunchParams(punch.profile.points);
     const ext = bounds(punch.profile.points);
@@ -22,17 +25,34 @@ describe('MotionX factory tooling', () => {
     expect(punch.stockStatus).toBe('in-stock');
     expect(punch.maxLoadPerMeter).toBe(0);
     expect(punch.segmentInventory).toEqual(MOTIONX_PUNCH_INVENTORY);
+    expect(punch.segmentInventory).toEqual([
+      { length: 10, quantity: 1 },
+      { length: 15, quantity: 1 },
+      { length: 20, quantity: 1 },
+      { length: 50, quantity: 1 },
+      { length: 100, quantity: 2 },
+      { length: 200, quantity: 1 },
+      { length: 300, quantity: 1 },
+      { length: 835, quantity: 2 },
+    ]);
     expect(punch.segmentInventory!.reduce((total, item) => total + item.length * item.quantity, 0)).toBe(2465);
     expect(punch.segmentInventory!.reduce((total, item) => total + item.quantity, 0)).toBe(10);
+    expect(punch.name).toBe('MotionX core punch 86° R0.2');
+    expect({ tipAngle: punch.tipAngle, tipRadius: punch.tipRadius }).toEqual(MOTIONX_PUNCH_SPEC);
     expect(isCCW(punch.profile.points)).toBe(true);
     expect(isSimplePolygon(punch.profile.points)).toBe(true);
     expect(ext.min.x).toBeCloseTo(-20.145096, 6);
     expect(ext.max.x).toBeCloseTo(4.981456, 6);
     expect(ext.min.y).toBe(0);
     expect(ext.max.y).toBeCloseTo(148.062248, 6);
-    expect(derived.tipAngle).toBeCloseTo(90, 2);
-    expect(derived.tipRadius).toBeCloseTo(0.2, 3);
+    expect(derived.tipAngle).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipAngle, 2);
+    expect(derived.tipRadius).toBeCloseTo(MOTIONX_PUNCH_CAD_SPEC.tipRadius, 3);
     expect(derived.tangCentreX).toBeCloseTo(-13.895097, 6);
+    expect(motionXPunchGeometryDiscrepancy(punch)).toEqual({
+      confirmed: MOTIONX_PUNCH_SPEC,
+      cad: MOTIONX_PUNCH_CAD_SPEC,
+    });
+    expect(motionXPunchGeometryDiscrepancy({ id: 'other' })).toBeNull();
   });
 
   it('creates all seven controller slots from one complete mesh-derived 65 mm multi-V body', () => {

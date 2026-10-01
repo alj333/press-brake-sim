@@ -469,6 +469,9 @@ export interface BendStep {
   stationId: string;
   punchId: string; dieId: string;
   punchName: string; dieName: string;
+  /** Tool calculation snapshot. Optional only for backward-compatible loading of older projects. */
+  punchTipAngle?: number;
+  punchTipRadius?: number;
   placement: Placement;
   /** Angles (deg): from flat, and included (what controllers display: 180 − angle). */
   targetAngle: number;

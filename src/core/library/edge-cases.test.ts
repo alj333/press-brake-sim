@@ -149,6 +149,8 @@ describe('migrateLibrary — hostile values', () => {
     const stalePunch = {
       ...currentPunch,
       name: 'Operator label',
+      tipAngle: 90,
+      tipRadius: 0.8,
       stockStatus: currentPunch.stockStatus === 'not-in-stock' ? 'in-stock' as const : 'not-in-stock' as const,
       segmentInventory: [{ length: 1, quantity: 99 }],
       physicalToolId: 'stale-physical-id',
@@ -166,6 +168,8 @@ describe('migrateLibrary — hostile values', () => {
     expect(migrated.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
     expect(migrated.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
     expect(migrated.punches[0]!.physicalToolId).toBe(currentPunch.physicalToolId);
+    expect(migrated.punches[0]!.tipAngle).toBe(86);
+    expect(migrated.punches[0]!.tipRadius).toBe(0.2);
     expect(migrated.dies[0]!.stockStatus).toBe(currentDie.stockStatus);
     expect(migrated.dies[0]!.segmentInventory).toEqual(currentDie.segmentInventory);
     expect(migrated.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
@@ -176,10 +180,26 @@ describe('migrateLibrary — hostile values', () => {
     expect(merged.punches[0]!.name).toBe('Operator label');
     expect(merged.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
     expect(merged.punches[0]!.segmentInventory).toEqual(currentPunch.segmentInventory);
+    expect(merged.punches[0]!.tipAngle).toBe(86);
+    expect(merged.punches[0]!.tipRadius).toBe(0.2);
     expect(merged.dies[0]!.slotNumber).toBe(currentDie.slotNumber);
     const filled = withStandardItems({ ...merged, punches: [stalePunch], dies: [staleDie] });
     expect(filled.punches[0]!.stockStatus).toBe(currentPunch.stockStatus);
+    expect(filled.punches[0]!.tipAngle).toBe(86);
     expect(filled.dies[0]!.physicalToolId).toBe(currentDie.physicalToolId);
+  });
+
+  it('replaces the retired built-in 90° MotionX punch label in persisted libraries', () => {
+    const currentPunch = std.punches[0]!;
+    const legacyPunch = {
+      ...currentPunch,
+      name: 'MotionX core punch 90° R0.2',
+      tipAngle: 90,
+    };
+    const migrated = migrateLibraryDetailed({ version: LIBRARY_VERSION, punches: [legacyPunch] }).library.punches[0]!;
+    expect(migrated.name).toBe('MotionX core punch 86° R0.2');
+    expect(migrated.tipAngle).toBe(86);
+    expect(migrated.tipRadius).toBe(0.2);
   });
 
   it('mergeLibraries keeps base order, appends overlay-only items, and withStandardItems is idempotent', () => {

@@ -117,6 +117,7 @@ describe('project store — tools and machine', () => {
     expect(station.zEnd).toBe(2782.5);
     expect(station.segments.reduce((total, segment) => total + segment, 0)).toBe(2465);
     expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
+      'warnings.setup.punchCadGeometryMismatch',
       'warnings.setup.controllerCadGeometryMismatch',
       'warnings.setup.dieLengthUnverified',
     ]);
@@ -402,6 +403,44 @@ describe('project store — files', () => {
       materialId: current.getState().project.materialId,
     });
     expect(reopened.program).toBeNull();
+  });
+
+  it('reopens legacy 90° MotionX programs as stale after migration, including preserved operator labels', async () => {
+    const legacy = makeProductionStore();
+    legacy.getState().loadFlat(loadTruth('L-bracket').flat);
+    await legacy.getState().plan();
+    const saved = serializeProject(legacy.getState().project, legacy.getState().library);
+
+    const currentRoundTrip = makeProductionStore();
+    currentRoundTrip.getState().loadProject(saved);
+    expect(currentRoundTrip.getState().programStale).toBe(false);
+
+    for (const legacyName of ['MotionX core punch 90° R0.2', 'Operator label']) {
+      const raw = JSON.parse(saved);
+      const savedPunch = raw.libraryOverlay.punches.find((punch: { id: string }) => punch.id === MOTIONX_PUNCH_ID);
+      savedPunch.name = legacyName;
+      savedPunch.tipAngle = 90;
+      for (const step of raw.program.steps) {
+        if (step.punchId !== MOTIONX_PUNCH_ID) continue;
+        step.punchName = legacyName;
+        delete step.punchTipAngle;
+        delete step.punchTipRadius;
+      }
+
+      const current = makeProductionStore();
+      current.getState().loadProject(JSON.stringify(raw));
+      const state = current.getState();
+      const migratedOverlay = state.project.libraryOverlay.punches.find(punch => punch.id === MOTIONX_PUNCH_ID)!;
+      expect(migratedOverlay.name).toBe(legacyName === 'Operator label' ? legacyName : 'MotionX core punch 86° R0.2');
+      expect(migratedOverlay.tipAngle).toBe(86);
+      expect(state.library.punches.find(punch => punch.id === MOTIONX_PUNCH_ID)?.tipAngle).toBe(86);
+      expect(state.project.program?.steps[0]?.punchName).toBe(legacyName);
+      expect(state.programStale).toBe(true);
+      expect(parseProject(state.saveProject(), {
+        machineId: state.project.machineId,
+        materialId: state.project.materialId,
+      }).program).toBeNull();
+    }
   });
 
   it('exports the program as JSON and bilingual CSV', async () => {

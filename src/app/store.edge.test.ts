@@ -456,6 +456,7 @@ describe('store — library loading', () => {
     expect(selectMachine(store.getState()).bedLength).toBe(2500);
     expect(store.getState().project.setup.stations[0]).toMatchObject({ zStart: 17.5, zEnd: 2482.5 });
     expect(selectSetupMessages(store.getState()).map(message => message.key)).toEqual([
+      'warnings.setup.punchCadGeometryMismatch',
       'warnings.setup.controllerCadGeometryMismatch',
       'warnings.setup.dieLengthUnverified',
     ]);

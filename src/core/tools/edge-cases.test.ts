@@ -12,6 +12,7 @@ import { flatFinger, steppedFinger } from './fingers';
 import { isSimplePolygon, tipArc } from './profile';
 import { segmentsForLength, defaultToolSetup, pickDieForThickness } from './setup';
 import { buildStandardLibrary } from './standard';
+import { MOTIONX_PUNCH_CAD_SPEC, MOTIONX_PUNCH_ID } from './factory';
 import { toolLoadCheck, daylightCheck, strokeCheck } from './checks';
 import { defaultMachine } from '../machine/default';
 import { validateSetup } from '../machine/validate';
@@ -95,7 +96,10 @@ describe('derivePunchParams — tips the builder skipped', () => {
       const mirrored = p.profile.points.map(q => ({ x: -q.x, y: q.y })).reverse();
       const d = derivePunchParams(mirrored);
       expect(d.tipRadius, p.id).toBeCloseTo(p.tipRadius, 3);
-      expect(d.tipAngle, p.id).toBeCloseTo(p.tipAngle, 2);
+      expect(d.tipAngle, p.id).toBeCloseTo(
+        p.id === MOTIONX_PUNCH_ID ? MOTIONX_PUNCH_CAD_SPEC.tipAngle : p.tipAngle,
+        2,
+      );
       expect(d.tangCentreX, p.id).toBeCloseTo(-p.tangCentreX, 6);
     }
   });

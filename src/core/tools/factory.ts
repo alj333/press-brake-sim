@@ -3,7 +3,9 @@
  * #press-brake-tool. Collision outlines are reconstructed from the public A360 triangle mesh
  * (straight dimensions are reliable; curved edges remain tessellated approximations). Active-die
  * values are the controller records photographed by Boom, so calculation metadata remains aligned
- * with the machine UI even where its nominal V differs from the mesh-derived face lines.
+ * with the machine UI even where its nominal V differs from the mesh-derived face lines. Punch
+ * calculation metadata follows the physical tip specification confirmed by the factory; the A360
+ * mesh remains the conservative collision outline where that source differs.
  */
 import type { Die, Polygon2, Punch, Vec2 } from '../types';
 import { finishProfile, roundTo } from './profile';
@@ -22,6 +24,12 @@ export const MOTIONX_DIE_SLOT_IDS = {
   7: 'std:motionx-core-die-r1-slot-7',
 } as const;
 export const MOTIONX_DEFAULT_DIE_ID = MOTIONX_DIE_SLOT_IDS[1];
+
+/** Confirmed physical tip specification shared by every stocked MotionX punch section. */
+export const MOTIONX_PUNCH_SPEC = { tipAngle: 86, tipRadius: 0.2 } as const;
+
+/** Parameters derived from the retained A360 collision outline. */
+export const MOTIONX_PUNCH_CAD_SPEC = { tipAngle: 90, tipRadius: 0.2 } as const;
 
 /** Confirmed physical punch inventory: 10 pieces, 2,465 mm total. */
 export const MOTIONX_PUNCH_INVENTORY = [
@@ -117,7 +125,7 @@ export function motionXFactoryPunch(): Punch {
   return {
     kind: 'punch',
     id: MOTIONX_PUNCH_ID,
-    name: 'MotionX core punch 90° R0.2',
+    name: 'MotionX core punch 86° R0.2',
     source: 'standard',
     family: 'gooseneck',
     height: 148.062248355,
@@ -126,11 +134,27 @@ export function motionXFactoryPunch(): Punch {
     segmentInventory: MOTIONX_PUNCH_INVENTORY.map(item => ({ ...item })),
     stockStatus: 'in-stock',
     profile: punchProfile(),
-    tipRadius: 0.2,
-    tipAngle: 90,
+    tipRadius: MOTIONX_PUNCH_SPEC.tipRadius,
+    tipAngle: MOTIONX_PUNCH_SPEC.tipAngle,
     bodyWidth: 25.126552,
     tangCentreX: -13.895097,
-    notes: `A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}); curved edges are tessellated approximations; load rating awaits factory confirmation.`,
+    notes: `Confirmed physical tip 86° R0.2; A360 mesh-derived profile (${MOTIONX_TOOL_SOURCE_SHA256}) is retained as a conservative approximately 90° collision outline; curved edges are tessellated approximations; load rating awaits factory confirmation.`,
+  };
+}
+
+export interface MotionXPunchGeometryDiscrepancy {
+  confirmed: { tipAngle: number; tipRadius: number };
+  cad: { tipAngle: number; tipRadius: number };
+}
+
+/** Returns the intentional confirmed-spec↔A360-outline difference for the MotionX punch. */
+export function motionXPunchGeometryDiscrepancy(
+  punch: Pick<Punch, 'id'>,
+): MotionXPunchGeometryDiscrepancy | null {
+  if (punch.id !== MOTIONX_PUNCH_ID) return null;
+  return {
+    confirmed: { ...MOTIONX_PUNCH_SPEC },
+    cad: { ...MOTIONX_PUNCH_CAD_SPEC },
   };
 }
 

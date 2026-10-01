@@ -2,7 +2,7 @@
  * Machine and tool-setup validation → Message[] (i18n keys, see docs/specs/tooling-machine.md §2).
  */
 import type { Machine, Message, ToolLibrary, ToolSetup } from '../types';
-import { MOTIONX_DIE_PHYSICAL_ID, motionXDieGeometryDiscrepancy } from '../tools/factory';
+import { MOTIONX_DIE_PHYSICAL_ID, motionXDieGeometryDiscrepancy, motionXPunchGeometryDiscrepancy } from '../tools/factory';
 import { availableSegmentLengths, hasBoundedSegmentInventory, isToolInStock } from '../tools/stock';
 
 export interface ValidateMachineOptions {
@@ -90,6 +90,20 @@ export function validateSetup(setup: ToolSetup, machine: Machine, library: Libra
     if (!die) out.push({ key: 'warnings.setup.unknownTool', severity: 'error', params: { stationId: st.id, toolId: st.dieId } });
     if (punch && !isToolInStock(punch)) out.push({ key: 'warnings.setup.toolNotInStock', severity: 'warning', params: { stationId: st.id, tool: punch.name } });
     if (die && !isToolInStock(die)) out.push({ key: 'warnings.setup.toolNotInStock', severity: 'warning', params: { stationId: st.id, tool: die.name } });
+    const punchGeometryDiscrepancy = punch ? motionXPunchGeometryDiscrepancy(punch) : null;
+    if (punchGeometryDiscrepancy) {
+      out.push({
+        key: 'warnings.setup.punchCadGeometryMismatch',
+        severity: 'warning',
+        params: {
+          stationId: st.id,
+          confirmedAngle: punchGeometryDiscrepancy.confirmed.tipAngle,
+          confirmedRadius: punchGeometryDiscrepancy.confirmed.tipRadius,
+          cadAngle: punchGeometryDiscrepancy.cad.tipAngle,
+          cadRadius: punchGeometryDiscrepancy.cad.tipRadius,
+        },
+      });
+    }
     const geometryDiscrepancy = die ? motionXDieGeometryDiscrepancy(die) : null;
     if (geometryDiscrepancy) {
       out.push({

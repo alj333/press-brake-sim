@@ -169,6 +169,7 @@ const STEP_NUMBER_FIELDS = [
   'index', 'targetAngle', 'includedAngle', 'springback', 'overbendAngle', 'loadedIncludedAngle', 'actualInnerRadius', 'ramDepth', 'pinchY',
   'ramUpperLimit', 'force', 'forcePerMeter', 'bendLength', 'punchLength', 'partZOffset', 'gaugedFlangeOutside', 'bendDeduction',
 ] as const;
+const STEP_OPTIONAL_NUMBER_FIELDS = ['punchTipAngle', 'punchTipRadius'] as const;
 const STEP_STRING_FIELDS = ['bendId', 'stationId', 'punchId', 'dieId', 'punchName', 'dieName'] as const;
 
 function isMat4(v: unknown): boolean {
@@ -179,6 +180,7 @@ function isMat4(v: unknown): boolean {
 function isBendStep(v: unknown, bendIds: Set<string>): v is BendStep {
   if (!isObject(v)) return false;
   if (!STEP_NUMBER_FIELDS.every(k => typeof v[k] === 'number' && Number.isFinite(v[k]))) return false;
+  if (!STEP_OPTIONAL_NUMBER_FIELDS.every(k => v[k] === undefined || (typeof v[k] === 'number' && Number.isFinite(v[k])))) return false;
   if (v.loadPercentOfTool !== null && !(typeof v.loadPercentOfTool === 'number' && Number.isFinite(v.loadPercentOfTool))) return false;
   if (!STEP_STRING_FIELDS.every(k => typeof v[k] === 'string')) return false;
   if (!bendIds.has(v.bendId as string)) return false;

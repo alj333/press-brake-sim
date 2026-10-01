@@ -16,7 +16,7 @@ import { matchToDxf, recognizeSheet } from '../core/import/recognize';
 import { buildPartModel } from '../core/part';
 import {
   STANDARD_MATERIAL_ID, availableSegmentLengths, buildStandardLibrary, defaultToolSetup,
-  hasBoundedSegmentInventory, newCustomId, segmentsForLength,
+  hasBoundedSegmentInventory, MOTIONX_PUNCH_ID, newCustomId, segmentsForLength,
 } from '../core/tools';
 import { defaultMachine, validateMachine, validateSetup } from '../core/machine';
 import { LibraryStore, findMachine, findMaterial } from '../core/library';
@@ -256,6 +256,21 @@ function programBendIds(program: BendProgram | null): string[] {
 
 function sameOrder(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
+/** A saved program carries operator-facing and calculation snapshots; changes require a re-plan. */
+function programToolsDiffer(program: BendProgram | null, library: Pick<ToolLibrary, 'punches' | 'dies'>): boolean {
+  return program?.steps.some(step => {
+    const punch = library.punches.find(item => item.id === step.punchId);
+    const die = library.dies.find(item => item.id === step.dieId);
+    if (!punch || !die) return true;
+    const dieName = die.slotNumber ? `${die.name} · ID ${die.slotNumber}` : die.name;
+    const missingMotionXSnapshot = step.punchId === MOTIONX_PUNCH_ID
+      && (step.punchTipAngle === undefined || step.punchTipRadius === undefined);
+    const calculationDiffers = (step.punchTipAngle !== undefined && step.punchTipAngle !== punch.tipAngle)
+      || (step.punchTipRadius !== undefined && step.punchTipRadius !== punch.tipRadius);
+    return missingMotionXSnapshot || calculationDiffers || step.punchName !== punch.name || step.dieName !== dieName;
+  }) ?? false;
 }
 
 export function selectSetupMessages(s: Pick<ProjectState, 'project' | 'library'>): Message[] {
@@ -918,6 +933,7 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
         }
         const setupInvalidatesProgram = !!next.program && !!current && validateSetup(next.setup, current, library)
           .some(message => message.severity === 'error' || message.key === 'warnings.setup.toolNotInStock');
+        const programToolDiffers = programToolsDiffer(next.program, library);
         set({
           project: next,
           thickness: next.part?.flat.thickness ?? s.thickness,
@@ -925,7 +941,7 @@ export function createProjectStore(opts: CreateStoreOptions = {}): UseBoundStore
           importWarnings: next.part?.flat.warnings ?? [],
           importing: false, planning: false, planProgress: null,
           fixedOrder,
-          programStale: machineDiffers || orderDiffers || setupInvalidatesProgram,
+          programStale: machineDiffers || orderDiffers || setupInvalidatesProgram || programToolDiffers,
           planError: null, selectedBendId: null, selectedStepIndex: next.program?.steps.length ? 0 : null,
         });
         if (next.language !== s.project.language) get().setLanguage(next.language);
